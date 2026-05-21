@@ -1,0 +1,13 @@
+server:
+  port: 8080
+
+zentao_mini:
+  base_url: "http://localhost:12345/api"
+  timeout: 120
+  zentao_base_url: "https://zentao.example.com"
+
+database:
+  path: "~/.zentao-release-center/release.db"
+
+log:
+  level: info
