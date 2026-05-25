@@ -1,0 +1,44 @@
+services:
+  zentao-mini:
+    image: ghcr.io/yi-nology/zentao-mini:latest
+    container_name: zentao-mini
+    restart: unless-stopped
+    ports:
+      - "${ZENTAO_MINI_PORT:-12345}:12345"
+    volumes:
+      - zentao-mini-data:/app/data
+    environment:
+      - PORT=12345
+      - ZENTAO_SERVER=${ZENTAO_SERVER}
+      - ZENTAO_ACCOUNT=${ZENTAO_ACCOUNT}
+      - ZENTAO_PASSWORD=${ZENTAO_PASSWORD}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:12345/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  release-center:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: zentao-release-center
+    restart: unless-stopped
+    depends_on:
+      zentao-mini:
+        condition: service_healthy
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    volumes:
+      - release-center-data:/data
+      - ../config.yaml:/app/config.yaml:ro
+    environment:
+      - ZENTAO_RELEASE_DATABASE_PATH=/data/release.db
+      - ZENTAO_RELEASE_ZENTAO_MINI_BASE_URL=http://zentao-mini:12345/api
+    env_file:
+      - .env
+
+volumes:
+  zentao-mini-data:
+  release-center-data:
