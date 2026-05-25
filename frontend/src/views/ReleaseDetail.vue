@@ -394,7 +394,7 @@ async function confirmBugs() {
   const base = zentaoBaseUrl.value
   const its = selectedBugs.value.map(b => ({
     releaseId,
-    itemType: 'bug',
+    itemType: 'bug' as const,
     zentaoId: b.id,
     zentaoType: 'bug',
     title: b.title,
@@ -438,7 +438,7 @@ async function confirmTasks() {
   const base = zentaoBaseUrl.value
   const its = selectedTasks.value.map(t => ({
     releaseId,
-    itemType: 'task',
+    itemType: 'task' as const,
     zentaoId: t.id,
     zentaoType: 'task',
     title: t.name || t.title || '',

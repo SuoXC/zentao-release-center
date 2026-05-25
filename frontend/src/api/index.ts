@@ -82,13 +82,9 @@ export interface Deployment {
   updatedAt: string
 }
 
-interface ApiResp<T = unknown> {
+interface ApiResp {
   base: BaseResp
   [key: string]: unknown
-}
-
-function extractData<T>(resp: ApiResp<T>, field: string = 'data'): T | null {
-  return (resp as any)[field] ?? null
 }
 
 export const projectApi = {
