@@ -82,11 +82,6 @@ export interface Deployment {
   updatedAt: string
 }
 
-interface ApiResp {
-  base: BaseResp
-  [key: string]: unknown
-}
-
 export const projectApi = {
   list: (params?: Record<string, unknown>) => api.get('/projects', { params }),
   get: (id: string) => api.get('/projects/detail', { params: { id } }),
