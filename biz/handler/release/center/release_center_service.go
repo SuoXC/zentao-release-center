@@ -2,8 +2,6 @@ package center
 
 import (
 	"context"
-	"encoding/json"
-	"strconv"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
@@ -438,11 +436,6 @@ func Health(ctx context.Context, c *app.RequestContext) {
 		ZentaoBaseUrl:    &zb,
 	})
 }
-
-var (
-	_ = json.RawMessage{}
-	_ = strconv.Itoa(0)
-)
 
 // AddDeployment .
 // @router /api/deployments [POST]

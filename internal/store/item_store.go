@@ -16,6 +16,10 @@ func NewItemStore(s *Store) *ItemStore {
 	return &ItemStore{db: s.DB()}
 }
 
+func (is *ItemStore) DB() *sql.DB {
+	return is.db
+}
+
 func strPtr(s string) *string { return &s }
 func int32Ptr(i int32) *int32  { return &i }
 
@@ -88,6 +92,40 @@ func (is *ItemStore) Add(releaseID, itemType string, zentaoID int, zentaoType, t
 	return is.GetByID(id)
 }
 
+func (is *ItemStore) ExistsByZentaoID(releaseID string, zentaoID int) (bool, error) {
+	var count int
+	err := is.db.QueryRow("SELECT COUNT(*) FROM release_items WHERE release_id = ? AND zentao_id = ?", releaseID, zentaoID).Scan(&count)
+	return count > 0, err
+}
+
+func (is *ItemStore) AddBatch(tx *sql.Tx, releaseID string, items []struct {
+	ItemType, ZentaoType, Title, Severity, Priority, Status, AssignedTo, ResolvedBy, ZentaoURL, Steps, NoteTitle, NoteContent string
+	ZentaoID int
+}) ([]*center.ReleaseItem, error) {
+	var maxOrder sql.NullInt32
+	tx.QueryRow("SELECT COALESCE(MAX(sort_order), 0) FROM release_items WHERE release_id = ?", releaseID).Scan(&maxOrder)
+	sortOrder := int(maxOrder.Int32)
+
+	var result []*center.ReleaseItem
+	now := time.Now().Format(time.DateTime)
+	for _, item := range items {
+		sortOrder++
+		id := uuid.New().String()
+		_, err := tx.Exec(`INSERT INTO release_items (id, release_id, item_type, sort_order, zentao_id, zentao_type, title, severity, priority, status, assigned_to, resolved_by, zentao_url, steps, note_title, note_content, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			id, releaseID, item.ItemType, sortOrder, item.ZentaoID, item.ZentaoType, item.Title, item.Severity, item.Priority, item.Status, item.AssignedTo, item.ResolvedBy, item.ZentaoURL, item.Steps, item.NoteTitle, item.NoteContent, now, now)
+		if err != nil {
+			return nil, err
+		}
+		created, err := is.GetByID(id)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, created)
+	}
+	return result, nil
+}
+
 func (is *ItemStore) GetByID(id string) (*center.ReleaseItem, error) {
 	return scanItem(is.db.QueryRow(`SELECT id, release_id, item_type, sort_order, zentao_id, zentao_type, title, severity, priority, status, assigned_to, resolved_by, zentao_url, steps, note_title, note_content, created_at, updated_at FROM release_items WHERE id = ?`, id))
 }
@@ -150,6 +188,12 @@ func (is *ItemStore) ListByRelease(releaseID string) ([]*center.ReleaseItem, err
 	return list, nil
 }
 
+var itemAllowedFields = map[string]bool{
+	"title": true, "severity": true, "priority": true, "status": true,
+	"assigned_to": true, "resolved_by": true, "steps": true,
+	"note_title": true, "note_content": true, "sort_order": true,
+}
+
 func (is *ItemStore) Update(id string, fields map[string]interface{}) error {
 	if len(fields) == 0 {
 		return nil
@@ -158,11 +202,17 @@ func (is *ItemStore) Update(id string, fields map[string]interface{}) error {
 	setClauses := ""
 	args := []interface{}{}
 	for k, v := range fields {
+		if !itemAllowedFields[k] && k != "updated_at" {
+			continue
+		}
 		if setClauses != "" {
 			setClauses += ", "
 		}
 		setClauses += k + " = ?"
 		args = append(args, v)
+	}
+	if setClauses == "" {
+		return nil
 	}
 	args = append(args, id)
 	_, err := is.db.Exec("UPDATE release_items SET "+setClauses+" WHERE id = ?", args...)

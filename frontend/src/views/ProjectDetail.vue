@@ -5,6 +5,7 @@
         <router-link to="/projects" class="btn btn-sm">← 返回</router-link>
         <h1 class="page-title">{{ project?.name || '项目详情' }}</h1>
         <span v-if="project" :class="['badge', project.status === 'active' ? 'badge-success' : 'badge-warning']">{{ project.status }}</span>
+        <span v-if="pageLoading" class="loading-spinner"></span>
       </div>
       <button class="btn btn-primary" @click="showCreate = true">新建发布单</button>
     </div>
@@ -55,14 +56,14 @@
             <td>{{ r.itemCount }}</td>
             <td>{{ r.bugCount }} / {{ r.taskCount }} / {{ r.noteCount }}</td>
             <td>{{ r.publishCount }}</td>
-            <td>{{ r.updatedAt }}</td>
+            <td>{{ formatTime(r.updatedAt) }}</td>
             <td class="actions">
               <button class="btn btn-sm btn-danger" @click="deleteRelease(r.id)">删除</button>
             </td>
           </tr>
         </tbody>
       </table>
-      <div v-else class="empty-state">
+      <div v-else-if="!pageLoading" class="empty-state">
         <h3>暂无发布单</h3>
         <p>点击「新建发布单」开始</p>
       </div>
@@ -81,28 +82,43 @@ const project = ref<Project | null>(null)
 const releases = ref<Release[]>([])
 const showCreate = ref(false)
 const form = ref({ name: '', version: '', summary: '' })
+const pageLoading = ref(false)
+
+function formatTime(t: string) {
+  if (!t) return '-'
+  return t.replace('T', ' ').substring(0, 19)
+}
 
 async function load() {
   const id = route.query.id as string
   if (!id) return
-  const pResp: any = await projectApi.get(id)
-  project.value = pResp?.data || null
-  const rResp: any = await releaseApi.list({ projectId: id })
-  releases.value = rResp?.list || []
+  pageLoading.value = true
+  try {
+    const pResp: any = await projectApi.get(id)
+    project.value = pResp?.data || null
+    const rResp: any = await releaseApi.list({ projectId: id })
+    releases.value = rResp?.list || []
+  } catch {} finally {
+    pageLoading.value = false
+  }
 }
 
 async function createRelease() {
   if (!form.value.name) return alert('请输入名称')
-  await releaseApi.create({ projectId: route.query.id as string, ...form.value })
-  form.value = { name: '', version: '', summary: '' }
-  showCreate.value = false
-  load()
+  try {
+    await releaseApi.create({ projectId: route.query.id as string, ...form.value })
+    form.value = { name: '', version: '', summary: '' }
+    showCreate.value = false
+    await load()
+  } catch {}
 }
 
 async function deleteRelease(id: string) {
   if (!confirm('确定删除？')) return
-  await releaseApi.delete(id)
-  load()
+  try {
+    await releaseApi.delete(id)
+    await load()
+  } catch {}
 }
 
 onMounted(load)

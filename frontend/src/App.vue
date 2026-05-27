@@ -17,9 +17,31 @@
     </aside>
     <main class="content">
       <router-view />
+      <div v-if="toast.visible" :class="['toast', 'toast-' + toast.type]">
+        {{ toast.message }}
+      </div>
     </main>
   </div>
 </template>
+
+<script setup lang="ts">
+import { reactive, onMounted, onUnmounted } from 'vue'
+
+const toast = reactive({ visible: false, type: 'error', message: '' })
+let timer: ReturnType<typeof setTimeout> | null = null
+
+function showToast(e: Event) {
+  const d = (e as CustomEvent).detail
+  toast.type = d.type || 'error'
+  toast.message = d.message
+  toast.visible = true
+  if (timer) clearTimeout(timer)
+  timer = setTimeout(() => { toast.visible = false }, 4000)
+}
+
+onMounted(() => window.addEventListener('app:toast', showToast))
+onUnmounted(() => window.removeEventListener('app:toast', showToast))
+</script>
 
 <style>
 :root {
@@ -94,4 +116,12 @@ table.data-table tr:hover { background: var(--bg-hover); }
 .mb-16 { margin-bottom: 16px; }
 .flex-between { display: flex; justify-content: space-between; align-items: center; }
 .gap-8 { gap: 8px; }
+
+.toast { position: fixed; top: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 9999; animation: slideIn 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.toast-error { background: #FEE2E2; color: #DC2626; border: 1px solid #FECACA; }
+.toast-success { background: #DCFCE7; color: #16A34A; border: 1px solid #BBF7D0; }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+.loading-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>

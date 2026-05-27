@@ -26,6 +26,10 @@ func NewStore(dbPath string) (*Store, error) {
 
 	db.SetMaxOpenConns(1)
 
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return nil, fmt.Errorf("enable foreign keys: %w", err)
+	}
+
 	s := &Store{db: db}
 	if err := s.migrate(); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)

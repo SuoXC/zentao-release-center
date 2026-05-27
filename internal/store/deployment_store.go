@@ -2,7 +2,6 @@ package store
 
 import (
 	"database/sql"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -69,6 +68,10 @@ func (ds *DeploymentStore) ListByRelease(releaseID string) ([]*center.Deployment
 	return list, nil
 }
 
+var deploymentAllowedFields = map[string]bool{
+	"module_name": true, "address": true, "description": true, "sort_order": true,
+}
+
 func (ds *DeploymentStore) Update(id string, fields map[string]interface{}) error {
 	if len(fields) == 0 {
 		return nil
@@ -78,11 +81,17 @@ func (ds *DeploymentStore) Update(id string, fields map[string]interface{}) erro
 	setClauses := ""
 	args := []interface{}{}
 	for k, v := range fields {
+		if !deploymentAllowedFields[k] && k != "updated_at" {
+			continue
+		}
 		if setClauses != "" {
 			setClauses += ", "
 		}
 		setClauses += k + " = ?"
 		args = append(args, v)
+	}
+	if setClauses == "" {
+		return nil
 	}
 	args = append(args, id)
 	_, err := ds.db.Exec("UPDATE release_deployments SET "+setClauses+" WHERE id = ?", args...)
@@ -117,18 +126,3 @@ func (ds *DeploymentStore) Reorder(items []struct {
 	return tx.Commit()
 }
 
-func scanDeployment(row *sql.Row) (*center.Deployment, error) {
-	d := &center.Deployment{}
-	var desc sql.NullString
-	err := row.Scan(&d.ID, &d.ReleaseId, &d.ModuleName, &d.Address, &desc, &d.SortOrder, &d.CreatedAt, &d.UpdatedAt)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	d.Description = desc.String
-	return d, nil
-}
-
-var _ = fmt.Sprintf

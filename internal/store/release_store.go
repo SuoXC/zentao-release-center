@@ -112,6 +112,10 @@ func (rs *ReleaseStore) List(projectID, status string, page, pageSize int) ([]*c
 	return list, total, nil
 }
 
+var releaseAllowedFields = map[string]bool{
+	"name": true, "version": true, "summary": true, "status": true,
+}
+
 func (rs *ReleaseStore) Update(id string, fields map[string]interface{}) error {
 	if len(fields) == 0 {
 		return nil
@@ -120,11 +124,17 @@ func (rs *ReleaseStore) Update(id string, fields map[string]interface{}) error {
 	setClauses := ""
 	args := []interface{}{}
 	for k, v := range fields {
+		if !releaseAllowedFields[k] && k != "updated_at" {
+			continue
+		}
 		if setClauses != "" {
 			setClauses += ", "
 		}
 		setClauses += k + " = ?"
 		args = append(args, v)
+	}
+	if setClauses == "" {
+		return nil
 	}
 	args = append(args, id)
 	_, err := rs.db.Exec("UPDATE releases SET "+setClauses+" WHERE id = ?", args...)

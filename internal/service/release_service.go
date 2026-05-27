@@ -116,14 +116,58 @@ func (rs *ReleaseService) AddItem(req *center.AddItemReq) (*center.ReleaseItem, 
 }
 
 func (rs *ReleaseService) BatchAddItems(req *center.BatchAddItemsReq) ([]*center.ReleaseItem, error) {
-	var items []*center.ReleaseItem
+	tx, err := rs.itemStore.DB().Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	var toAdd []struct {
+		ItemType, ZentaoType, Title, Severity, Priority, Status, AssignedTo, ResolvedBy, ZentaoURL, Steps, NoteTitle, NoteContent string
+		ZentaoID                                                                                                                  int
+	}
+
 	for _, item := range req.Items {
-		item.ReleaseId = req.ReleaseId
-		added, err := rs.AddItem(item)
-		if err != nil {
-			return nil, err
+		zentaoID := 0
+		if item.ZentaoId != nil {
+			zentaoID = int(*item.ZentaoId)
 		}
-		items = append(items, added)
+		if zentaoID > 0 {
+			exists, _ := rs.itemStore.ExistsByZentaoID(req.ReleaseId, zentaoID)
+			if exists {
+				continue
+			}
+		}
+		toAdd = append(toAdd, struct {
+			ItemType, ZentaoType, Title, Severity, Priority, Status, AssignedTo, ResolvedBy, ZentaoURL, Steps, NoteTitle, NoteContent string
+			ZentaoID                                                                                                                  int
+		}{
+			ItemType:    item.GetItemType(),
+			ZentaoType:  item.GetZentaoType(),
+			Title:       item.GetTitle(),
+			Severity:    item.GetSeverity(),
+			Priority:    item.GetPriority(),
+			Status:      item.GetStatus(),
+			AssignedTo:  item.GetAssignedTo(),
+			ResolvedBy:  item.GetResolvedBy(),
+			ZentaoURL:   item.GetZentaoUrl(),
+			Steps:       item.GetSteps(),
+			NoteTitle:   item.GetNoteTitle(),
+			NoteContent: item.GetNoteContent(),
+			ZentaoID:    zentaoID,
+		})
+	}
+
+	if len(toAdd) == 0 {
+		return nil, nil
+	}
+
+	items, err := rs.itemStore.AddBatch(tx, req.ReleaseId, toAdd)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
 	}
 	return items, nil
 }
@@ -174,41 +218,24 @@ func (rs *ReleaseService) RefreshItems(releaseID string) error {
 		return fmt.Errorf("project has no zentao product configured")
 	}
 
+	var bugs, tasks []*center.ReleaseItem
 	for _, item := range items {
-		if item.ItemType != "bug" && item.ItemType != "task" {
-			continue
+		switch item.ItemType {
+		case "bug":
+			bugs = append(bugs, item)
+		case "task":
+			tasks = append(tasks, item)
 		}
-		rs.refreshZentaoItem(project, item)
 	}
-	return nil
-}
 
-func (rs *ReleaseService) refreshZentaoItem(project *center.Project, item *center.ReleaseItem) {
-	if item.ItemType == "bug" && project.ZentaoProductId > 0 {
-		data, err := rs.zentaoClient.GetBugs(int(project.ZentaoProductId), 0, "", 1, 100)
-		if err != nil {
-			return
-		}
-		var result struct {
-			List []struct {
-				ID       int    `json:"id"`
-				Title    string `json:"title"`
-				Severity interface{} `json:"severity"`
-				Pri      interface{} `json:"pri"`
-				Status   string `json:"status"`
-				AssignedTo struct {
-					Realname string `json:"realname"`
-				} `json:"assignedTo"`
-				ResolvedBy interface{} `json:"resolvedBy"`
-				Steps      string `json:"steps"`
-			} `json:"list"`
-		}
-		if err := json.Unmarshal(data, &result); err != nil {
-			return
-		}
-		for _, b := range result.List {
-			if item.ZentaoId != nil && b.ID == int(*item.ZentaoId) {
-				fields := map[string]interface{}{
+	if len(bugs) > 0 {
+		bugMap := rs.fetchBugMap(int(project.ZentaoProductId))
+		for _, item := range bugs {
+			if item.ZentaoId == nil {
+				continue
+			}
+			if b, ok := bugMap[int(*item.ZentaoId)]; ok {
+				rs.itemStore.Update(item.ID, map[string]interface{}{
 					"title":       b.Title,
 					"severity":    fmt.Sprintf("%v", b.Severity),
 					"priority":    fmt.Sprintf("%v", b.Pri),
@@ -216,12 +243,88 @@ func (rs *ReleaseService) refreshZentaoItem(project *center.Project, item *cente
 					"assigned_to": b.AssignedTo.Realname,
 					"resolved_by": fmt.Sprintf("%v", b.ResolvedBy),
 					"steps":       b.Steps,
-				}
-				rs.itemStore.Update(item.ID, fields)
-				break
+				})
 			}
 		}
 	}
+
+	if len(tasks) > 0 {
+		taskMap := rs.fetchTaskMap(int(project.ZentaoProductId))
+		for _, item := range tasks {
+			if item.ZentaoId == nil {
+				continue
+			}
+			if t, ok := taskMap[int(*item.ZentaoId)]; ok {
+				rs.itemStore.Update(item.ID, map[string]interface{}{
+					"title":       t.Name,
+					"priority":    fmt.Sprintf("%v", t.Pri),
+					"status":      t.Status,
+					"assigned_to": t.AssignedTo.Realname,
+				})
+			}
+		}
+	}
+
+	return nil
+}
+
+type zentaoBug struct {
+	ID       int    `json:"id"`
+	Title    string `json:"title"`
+	Severity interface{} `json:"severity"`
+	Pri      interface{} `json:"pri"`
+	Status   string `json:"status"`
+	AssignedTo struct {
+		Realname string `json:"realname"`
+	} `json:"assignedTo"`
+	ResolvedBy interface{} `json:"resolvedBy"`
+	Steps      string `json:"steps"`
+}
+
+type zentaoTask struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Pri   interface{} `json:"pri"`
+	Status string `json:"status"`
+	AssignedTo struct {
+		Realname string `json:"realname"`
+	} `json:"assignedTo"`
+}
+
+func (rs *ReleaseService) fetchBugMap(productID int) map[int]zentaoBug {
+	data, err := rs.zentaoClient.GetBugs(productID, 0, "", 1, 500)
+	if err != nil {
+		return nil
+	}
+	var result struct {
+		List []zentaoBug `json:"list"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil
+	}
+	m := make(map[int]zentaoBug, len(result.List))
+	for _, b := range result.List {
+		m[b.ID] = b
+	}
+	return m
+}
+
+func (rs *ReleaseService) fetchTaskMap(productID int) map[int]zentaoTask {
+	data, err := rs.zentaoClient.GetTasks(0, productID, "", 1, 500)
+	if err != nil {
+		return nil
+	}
+	var result struct {
+		List []zentaoTask `json:"list"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil
+	}
+	m := make(map[int]zentaoTask, len(result.List))
+	for _, t := range result.List {
+		m[t.ID] = t
+	}
+	return m
 }
 
 func (rs *ReleaseService) Publish(releaseID, version string) (*center.ReleaseSnapshot, error) {

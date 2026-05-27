@@ -9,7 +9,12 @@ const api = axios.create({
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    console.error('API Error:', error)
+    const msg = error.response?.data?.message || error.message || '请求失败'
+    console.error('API Error:', msg)
+    if (typeof window !== 'undefined') {
+      const event = new CustomEvent('app:toast', { detail: { type: 'error', message: msg } })
+      window.dispatchEvent(event)
+    }
     return Promise.reject(error)
   }
 )

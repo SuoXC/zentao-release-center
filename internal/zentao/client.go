@@ -141,8 +141,6 @@ func (c *Client) GetTasks(executionID, productID int, status string, page, pageS
 
 func (c *Client) GetBug(bugID int) (json.RawMessage, error) {
 	return c.get("/bugs", map[string]string{
-		"productId": "0",
-		"page":      "1",
-		"pageSize":  "1",
+		"bugId": strconv.Itoa(bugID),
 	})
 }
