@@ -20,9 +20,11 @@ services:
       start_period: 10s
 
   release-center:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+    image: ghcr.io/yi-nology/zentao-release-center-backend:latest
+    # 本地构建取消上面 image 行，改用下面 build:
+    # build:
+    #   context: ..
+    #   dockerfile: Dockerfile
     container_name: zentao-release-center
     restart: unless-stopped
     expose:
@@ -37,9 +39,11 @@ services:
       - .env
 
   frontend:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.frontend
+    image: ghcr.io/yi-nology/zentao-release-center-frontend:latest
+    # 本地构建取消上面 image 行，改用下面 build:
+    # build:
+    #   context: ../frontend
+    #   dockerfile: Dockerfile
     container_name: zentao-frontend
     restart: unless-stopped
     ports:
