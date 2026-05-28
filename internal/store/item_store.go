@@ -117,9 +117,50 @@ func (is *ItemStore) AddBatch(tx *sql.Tx, releaseID string, items []struct {
 		if err != nil {
 			return nil, err
 		}
-		created, err := is.GetByID(id)
-		if err != nil {
-			return nil, err
+		created := &center.ReleaseItem{
+			ID:        id,
+			ReleaseId: releaseID,
+			ItemType:  item.ItemType,
+			SortOrder: int32(sortOrder),
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		if item.ZentaoID > 0 {
+			v := int32(item.ZentaoID)
+			created.ZentaoId = &v
+		}
+		if item.ZentaoType != "" {
+			created.ZentaoType = &item.ZentaoType
+		}
+		if item.Title != "" {
+			created.Title = &item.Title
+		}
+		if item.Severity != "" {
+			created.Severity = &item.Severity
+		}
+		if item.Priority != "" {
+			created.Priority = &item.Priority
+		}
+		if item.Status != "" {
+			created.Status = &item.Status
+		}
+		if item.AssignedTo != "" {
+			created.AssignedTo = &item.AssignedTo
+		}
+		if item.ResolvedBy != "" {
+			created.ResolvedBy = &item.ResolvedBy
+		}
+		if item.ZentaoURL != "" {
+			created.ZentaoUrl = &item.ZentaoURL
+		}
+		if item.Steps != "" {
+			created.Steps = &item.Steps
+		}
+		if item.NoteTitle != "" {
+			created.NoteTitle = &item.NoteTitle
+		}
+		if item.NoteContent != "" {
+			created.NoteContent = &item.NoteContent
 		}
 		result = append(result, created)
 	}

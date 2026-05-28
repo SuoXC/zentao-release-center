@@ -116,12 +116,6 @@ func (rs *ReleaseService) AddItem(req *center.AddItemReq) (*center.ReleaseItem, 
 }
 
 func (rs *ReleaseService) BatchAddItems(req *center.BatchAddItemsReq) ([]*center.ReleaseItem, error) {
-	tx, err := rs.itemStore.DB().Begin()
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-
 	var toAdd []struct {
 		ItemType, ZentaoType, Title, Severity, Priority, Status, AssignedTo, ResolvedBy, ZentaoURL, Steps, NoteTitle, NoteContent string
 		ZentaoID                                                                                                                  int
@@ -161,6 +155,12 @@ func (rs *ReleaseService) BatchAddItems(req *center.BatchAddItemsReq) ([]*center
 	if len(toAdd) == 0 {
 		return nil, nil
 	}
+
+	tx, err := rs.itemStore.DB().Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
 
 	items, err := rs.itemStore.AddBatch(tx, req.ReleaseId, toAdd)
 	if err != nil {
