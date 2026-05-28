@@ -25,11 +25,8 @@ services:
       dockerfile: deploy/Dockerfile
     container_name: zentao-release-center
     restart: unless-stopped
-    depends_on:
-      zentao-mini:
-        condition: service_healthy
-    ports:
-      - "${SERVER_PORT:-8080}:8080"
+    expose:
+      - "8080"
     volumes:
       - release-center-data:/data
       - ../config.yaml:/app/config.yaml:ro
@@ -38,6 +35,17 @@ services:
       - ZENTAO_RELEASE_ZENTAO_MINI_BASE_URL=http://zentao-mini:12345/api
     env_file:
       - .env
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+    container_name: zentao-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      - release-center
 
 volumes:
   zentao-mini-data:
