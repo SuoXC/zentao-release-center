@@ -6,8 +6,11 @@ import (
 	"strings"
 
 	center "github.com/yi-nology/zentao-release-center/biz/model/release/center"
+	"github.com/yi-nology/zentao-release-center/internal/mapper"
+	"github.com/yi-nology/zentao-release-center/internal/model"
 	"github.com/yi-nology/zentao-release-center/internal/store"
 	"github.com/yi-nology/zentao-release-center/internal/zentao"
+	"gorm.io/gorm"
 )
 
 type ReleaseService struct {
@@ -16,17 +19,27 @@ type ReleaseService struct {
 	snapshotStore   *store.SnapshotStore
 	projectStore    *store.ProjectStore
 	deploymentStore *store.DeploymentStore
+	repoStore       *store.RepoStore
+	branchStore     *store.BranchStore
+	dockerImageStore *store.DockerImageStore
+	featureStore    *store.FeatureStore
 	zentaoClient    *zentao.Client
+	notificationSvc *NotificationService
 }
 
-func NewReleaseService(s *store.Store, zc *zentao.Client) *ReleaseService {
+func NewReleaseService(db *gorm.DB, zc *zentao.Client, ns *NotificationService) *ReleaseService {
 	return &ReleaseService{
-		releaseStore:    store.NewReleaseStore(s),
-		itemStore:       store.NewItemStore(s),
-		snapshotStore:   store.NewSnapshotStore(s),
-		projectStore:    store.NewProjectStore(s),
-		deploymentStore: store.NewDeploymentStore(s),
+		releaseStore:    store.NewReleaseStore(db),
+		itemStore:       store.NewItemStore(db),
+		snapshotStore:   store.NewSnapshotStore(db),
+		projectStore:    store.NewProjectStore(db),
+		deploymentStore: store.NewDeploymentStore(db),
+		repoStore:       store.NewRepoStore(db),
+		branchStore:     store.NewBranchStore(db),
+		dockerImageStore: store.NewDockerImageStore(db),
+		featureStore:    store.NewFeatureStore(db),
 		zentaoClient:    zc,
+		notificationSvc: ns,
 	}
 }
 
@@ -44,43 +57,46 @@ func (rs *ReleaseService) Create(req *center.CreateReleaseReq) (*center.Release,
 	if project == nil {
 		return nil, fmt.Errorf("project not found")
 	}
-	rel, err := rs.releaseStore.Create(req.ProjectId, req.Name, req.GetVersion(), req.GetSummary())
+	rel, err := rs.releaseStore.Create(req.ProjectId, req.Name, req.GetVersion(), req.GetSummary(), req.GetParentBranch())
 	if err != nil {
 		return nil, err
 	}
-	rs.enrichRelease(rel, project)
-	return rel, nil
+	return mapper.ReleaseToThrift(rel, project.Name, 0, 0, 0, 0), nil
 }
 
-func (rs *ReleaseService) Get(id string) (*center.Release, error) {
-	rel, err := rs.releaseStore.GetByID(id)
+func (rs *ReleaseService) Get(keyword string) (*center.Release, error) {
+	rel, err := rs.releaseStore.GetByID(keyword)
 	if err != nil {
 		return nil, err
 	}
 	if rel == nil {
 		return nil, fmt.Errorf("release not found")
 	}
-	rs.fillCounts(rel)
-	project, _ := rs.projectStore.GetByID(rel.ProjectId)
+	total, bugs, tasks, notes, _ := rs.itemStore.CountByType(keyword)
+	project, _ := rs.projectStore.GetByID(rel.ProjectKeyword)
+	projectName := ""
 	if project != nil {
-		rs.enrichRelease(rel, project)
+		projectName = project.Name
 	}
-	return rel, nil
+	return mapper.ReleaseToThrift(rel, projectName, total, bugs, tasks, notes), nil
 }
 
-func (rs *ReleaseService) List(projectID, status string, page, pageSize int) ([]*center.Release, int, error) {
-	list, total, err := rs.releaseStore.List(projectID, status, page, pageSize)
+func (rs *ReleaseService) List(projectKeyword, status string, page, pageSize int) ([]*center.Release, int, error) {
+	releases, total, err := rs.releaseStore.List(projectKeyword, status, page, pageSize)
 	if err != nil {
 		return nil, 0, err
 	}
-	for _, rel := range list {
-		rs.fillCounts(rel)
-		project, _ := rs.projectStore.GetByID(rel.ProjectId)
+	result := make([]*center.Release, len(releases))
+	for i, rel := range releases {
+		total, bugs, tasks, notes, _ := rs.itemStore.CountByType(rel.Keyword)
+		project, _ := rs.projectStore.GetByID(rel.ProjectKeyword)
+		projectName := ""
 		if project != nil {
-			rs.enrichRelease(rel, project)
+			projectName = project.Name
 		}
+		result[i] = mapper.ReleaseToThrift(rel, projectName, total, bugs, tasks, notes)
 	}
-	return list, total, nil
+	return result, total, nil
 }
 
 func (rs *ReleaseService) Update(req *center.UpdateReleaseReq) error {
@@ -100,25 +116,32 @@ func (rs *ReleaseService) Update(req *center.UpdateReleaseReq) error {
 	if req.IsSetStatus() {
 		fields["status"] = req.Status
 	}
+	if req.IsSetParentBranch() {
+		fields["parent_branch"] = req.ParentBranch
+	}
 	return rs.releaseStore.Update(req.ID, fields)
 }
 
-func (rs *ReleaseService) Delete(id string) error {
-	return rs.releaseStore.Delete(id)
+func (rs *ReleaseService) Delete(keyword string) error {
+	return rs.releaseStore.Delete(keyword)
 }
 
 func (rs *ReleaseService) AddItem(req *center.AddItemReq) (*center.ReleaseItem, error) {
-	return rs.itemStore.Add(req.ReleaseId, req.ItemType,
+	item, err := rs.itemStore.Add(req.ReleaseId, req.ItemType,
 		int(req.GetZentaoId()), req.GetZentaoType(), req.GetTitle(),
 		req.GetSeverity(), req.GetPriority(), req.GetStatus(),
 		req.GetAssignedTo(), req.GetResolvedBy(), req.GetZentaoUrl(),
 		req.GetSteps(), req.GetNoteTitle(), req.GetNoteContent())
+	if err != nil {
+		return nil, err
+	}
+	return mapper.ItemToThrift(item), nil
 }
 
 func (rs *ReleaseService) BatchAddItems(req *center.BatchAddItemsReq) ([]*center.ReleaseItem, error) {
 	var toAdd []struct {
 		ItemType, ZentaoType, Title, Severity, Priority, Status, AssignedTo, ResolvedBy, ZentaoURL, Steps, NoteTitle, NoteContent string
-		ZentaoID                                                                                                                  int
+		ZentaoID int
 	}
 
 	for _, item := range req.Items {
@@ -134,7 +157,7 @@ func (rs *ReleaseService) BatchAddItems(req *center.BatchAddItemsReq) ([]*center
 		}
 		toAdd = append(toAdd, struct {
 			ItemType, ZentaoType, Title, Severity, Priority, Status, AssignedTo, ResolvedBy, ZentaoURL, Steps, NoteTitle, NoteContent string
-			ZentaoID                                                                                                                  int
+			ZentaoID int
 		}{
 			ItemType:    item.GetItemType(),
 			ZentaoType:  item.GetZentaoType(),
@@ -156,24 +179,27 @@ func (rs *ReleaseService) BatchAddItems(req *center.BatchAddItemsReq) ([]*center
 		return nil, nil
 	}
 
-	tx, err := rs.itemStore.DB().Begin()
+	items, err := rs.itemStore.AddBatch(req.ReleaseId, toAdd)
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
-
-	items, err := rs.itemStore.AddBatch(tx, req.ReleaseId, toAdd)
-	if err != nil {
-		return nil, err
+	result := make([]*center.ReleaseItem, len(items))
+	for i, item := range items {
+		result[i] = mapper.ItemToThrift(item)
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return items, nil
+	return result, nil
 }
 
-func (rs *ReleaseService) ListItems(releaseID string) ([]*center.ReleaseItem, error) {
-	return rs.itemStore.ListByRelease(releaseID)
+func (rs *ReleaseService) ListItems(releaseKeyword string) ([]*center.ReleaseItem, error) {
+	items, err := rs.itemStore.ListByRelease(releaseKeyword)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*center.ReleaseItem, len(items))
+	for i, item := range items {
+		result[i] = mapper.ItemToThrift(item)
+	}
+	return result, nil
 }
 
 func (rs *ReleaseService) UpdateItem(req *center.UpdateItemReq) error {
@@ -190,46 +216,47 @@ func (rs *ReleaseService) UpdateItem(req *center.UpdateItemReq) error {
 	return rs.itemStore.Update(req.ID, fields)
 }
 
-func (rs *ReleaseService) DeleteItem(id string) error {
-	return rs.itemStore.Delete(id)
+func (rs *ReleaseService) DeleteItem(keyword string) error {
+	return rs.itemStore.Delete(keyword)
 }
 
-func (rs *ReleaseService) ReorderItems(releaseID string, items []*center.SortItem) error {
-	sortItems := make([]struct{ ID string; SortOrder int }, len(items))
+func (rs *ReleaseService) ReorderItems(releaseKeyword string, items []*center.SortItem) error {
+	sortItems := make([]struct{ Keyword string; SortOrder int }, len(items))
 	for i, item := range items {
-		sortItems[i] = struct{ ID string; SortOrder int }{item.ID, int(item.SortOrder)}
+		sortItems[i] = struct{ Keyword string; SortOrder int }{item.ID, int(item.SortOrder)}
 	}
 	return rs.itemStore.Reorder(sortItems)
 }
 
-func (rs *ReleaseService) RefreshItems(releaseID string) error {
-	items, err := rs.itemStore.ListByRelease(releaseID)
+func (rs *ReleaseService) RefreshItems(releaseKeyword string) error {
+	items, err := rs.itemStore.ListByRelease(releaseKeyword)
 	if err != nil {
 		return err
 	}
 
-	rel, err := rs.releaseStore.GetByID(releaseID)
+	rel, err := rs.releaseStore.GetByID(releaseKeyword)
 	if err != nil || rel == nil {
 		return fmt.Errorf("release not found")
 	}
 
-	project, _ := rs.projectStore.GetByID(rel.ProjectId)
-	if project == nil || project.ZentaoProductId == 0 {
+	project, _ := rs.projectStore.GetByID(rel.ProjectKeyword)
+	if project == nil || project.ZentaoProductID == 0 {
 		return fmt.Errorf("project has no zentao product configured")
 	}
 
 	var bugs, tasks []*center.ReleaseItem
 	for _, item := range items {
-		switch item.ItemType {
+		t := mapper.ItemToThrift(item)
+		switch t.ItemType {
 		case "bug":
-			bugs = append(bugs, item)
+			bugs = append(bugs, t)
 		case "task":
-			tasks = append(tasks, item)
+			tasks = append(tasks, t)
 		}
 	}
 
 	if len(bugs) > 0 {
-		bugMap := rs.fetchBugMap(int(project.ZentaoProductId))
+		bugMap := rs.fetchBugMap(project.ZentaoProductID)
 		for _, item := range bugs {
 			if item.ZentaoId == nil {
 				continue
@@ -249,7 +276,7 @@ func (rs *ReleaseService) RefreshItems(releaseID string) error {
 	}
 
 	if len(tasks) > 0 {
-		taskMap := rs.fetchTaskMap(int(project.ZentaoProductId))
+		taskMap := rs.fetchTaskMap(project.ZentaoProductID)
 		for _, item := range tasks {
 			if item.ZentaoId == nil {
 				continue
@@ -327,82 +354,171 @@ func (rs *ReleaseService) fetchTaskMap(productID int) map[int]zentaoTask {
 	return m
 }
 
-func (rs *ReleaseService) Publish(releaseID, version string) (*center.ReleaseSnapshot, error) {
-	rel, err := rs.releaseStore.GetByID(releaseID)
+func (rs *ReleaseService) Publish(releaseKeyword, version string) (*center.ReleaseSnapshot, error) {
+	rel, err := rs.releaseStore.GetByID(releaseKeyword)
 	if err != nil || rel == nil {
 		return nil, fmt.Errorf("release not found")
 	}
 
-	items, err := rs.itemStore.ListByRelease(releaseID)
+	items, err := rs.itemStore.ListByRelease(releaseKeyword)
 	if err != nil {
 		return nil, err
 	}
 
-	total, bugs, tasks, notes, err := rs.itemStore.CountByType(releaseID)
+	total, bugs, tasks, notes, err := rs.itemStore.CountByType(releaseKeyword)
 	if err != nil {
 		return nil, err
 	}
 
-	deployments, err := rs.deploymentStore.ListByRelease(releaseID)
+	deployments, err := rs.deploymentStore.ListByRelease(releaseKeyword)
 	if err != nil {
 		return nil, err
 	}
 
-	content := rs.generateMarkdown(rel, items, deployments, version)
-
-	snap, err := rs.snapshotStore.Create(releaseID, version, content, total, bugs, tasks, notes)
+	branches, err := rs.branchStore.ListByRelease(releaseKeyword)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := rs.releaseStore.IncrementPublish(releaseID); err != nil {
+	dockerImages, err := rs.dockerImageStore.ListByRelease(releaseKeyword)
+	if err != nil {
 		return nil, err
 	}
 
-	return snap, nil
+	features, err := rs.featureStore.ListByRelease(releaseKeyword)
+	if err != nil {
+		return nil, err
+	}
+
+	thriftItems := make([]*center.ReleaseItem, len(items))
+	for i, item := range items {
+		thriftItems[i] = mapper.ItemToThrift(item)
+	}
+	thriftDeps := make([]*center.Deployment, len(deployments))
+	for i, dep := range deployments {
+		thriftDeps[i] = mapper.DeploymentToThrift(dep)
+	}
+	thriftBranches := make([]*center.ReleaseBranch, len(branches))
+	for i, b := range branches {
+		thriftBranches[i] = mapper.ReleaseBranchToThrift(b)
+	}
+	thriftImages := make([]*center.DockerImage, len(dockerImages))
+	for i, img := range dockerImages {
+		thriftImages[i] = mapper.DockerImageToThrift(img)
+	}
+	thriftFeatures := make([]*center.ReleaseFeature, len(features))
+	for i, f := range features {
+		thriftFeatures[i] = mapper.FeatureToThrift(f)
+	}
+	thriftRel := mapper.ReleaseToThrift(rel, "", total, bugs, tasks, notes)
+
+	content := rs.generateMarkdown(thriftRel, thriftItems, thriftDeps, thriftBranches, thriftImages, thriftFeatures, version)
+
+	snap, err := rs.snapshotStore.Create(releaseKeyword, version, content, total, bugs, tasks, notes)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := rs.releaseStore.IncrementPublish(releaseKeyword); err != nil {
+		return nil, err
+	}
+
+	if rs.notificationSvc != nil {
+		project, _ := rs.projectStore.GetByID(rel.ProjectKeyword)
+		projectName := ""
+		if project != nil {
+			projectName = project.Name
+		}
+		go rs.notificationSvc.NotifyReleasePublished(rel, items, deployments, projectName, version)
+	}
+
+	return mapper.SnapshotToThrift(snap), nil
 }
 
-func (rs *ReleaseService) ListSnapshots(releaseID string) ([]*center.ReleaseSnapshot, error) {
-	return rs.snapshotStore.ListByRelease(releaseID)
+func (rs *ReleaseService) ListSnapshots(releaseKeyword string) ([]*center.ReleaseSnapshot, error) {
+	snaps, err := rs.snapshotStore.ListByRelease(releaseKeyword)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*center.ReleaseSnapshot, len(snaps))
+	for i, snap := range snaps {
+		result[i] = mapper.SnapshotToThrift(snap)
+	}
+	return result, nil
 }
 
-func (rs *ReleaseService) GetSnapshot(id string) (*center.ReleaseSnapshot, error) {
-	snap, err := rs.snapshotStore.GetByID(id)
+func (rs *ReleaseService) GetSnapshot(keyword string) (*center.ReleaseSnapshot, error) {
+	snap, err := rs.snapshotStore.GetByID(keyword)
 	if err != nil {
 		return nil, err
 	}
 	if snap == nil {
 		return nil, fmt.Errorf("snapshot not found")
 	}
-	return snap, nil
+	return mapper.SnapshotToThrift(snap), nil
 }
 
-func (rs *ReleaseService) Export(releaseID, snapshotID, format string) (string, string, error) {
+func (rs *ReleaseService) Export(releaseKeyword, snapshotKeyword, format string) (string, string, error) {
 	var content string
 	var version string
 
-	if snapshotID != "" {
-		snap, err := rs.snapshotStore.GetByID(snapshotID)
+	if snapshotKeyword != "" {
+		snap, err := rs.snapshotStore.GetByID(snapshotKeyword)
 		if err != nil || snap == nil {
 			return "", "", fmt.Errorf("snapshot not found")
 		}
 		content = snap.Content
 		version = snap.Version
 	} else {
-		rel, err := rs.releaseStore.GetByID(releaseID)
+		rel, err := rs.releaseStore.GetByID(releaseKeyword)
 		if err != nil || rel == nil {
 			return "", "", fmt.Errorf("release not found")
 		}
-		items, err := rs.itemStore.ListByRelease(releaseID)
+		items, err := rs.itemStore.ListByRelease(releaseKeyword)
 		if err != nil {
 			return "", "", err
 		}
-		deployments, err := rs.deploymentStore.ListByRelease(releaseID)
+		deployments, err := rs.deploymentStore.ListByRelease(releaseKeyword)
+		if err != nil {
+			return "", "", err
+		}
+		branches, err := rs.branchStore.ListByRelease(releaseKeyword)
+		if err != nil {
+			return "", "", err
+		}
+		dockerImages, err := rs.dockerImageStore.ListByRelease(releaseKeyword)
+		if err != nil {
+			return "", "", err
+		}
+		features, err := rs.featureStore.ListByRelease(releaseKeyword)
 		if err != nil {
 			return "", "", err
 		}
 		version = rel.Version
-		content = rs.generateMarkdown(rel, items, deployments, rel.Version)
+
+		thriftItems := make([]*center.ReleaseItem, len(items))
+		for i, item := range items {
+			thriftItems[i] = mapper.ItemToThrift(item)
+		}
+		thriftDeps := make([]*center.Deployment, len(deployments))
+		for i, dep := range deployments {
+			thriftDeps[i] = mapper.DeploymentToThrift(dep)
+		}
+		thriftBranches := make([]*center.ReleaseBranch, len(branches))
+		for i, b := range branches {
+			thriftBranches[i] = mapper.ReleaseBranchToThrift(b)
+		}
+		thriftImages := make([]*center.DockerImage, len(dockerImages))
+		for i, img := range dockerImages {
+			thriftImages[i] = mapper.DockerImageToThrift(img)
+		}
+		thriftFeatures := make([]*center.ReleaseFeature, len(features))
+		for i, f := range features {
+			thriftFeatures[i] = mapper.FeatureToThrift(f)
+		}
+		thriftRel := mapper.ReleaseToThrift(rel, "", 0, 0, 0, 0)
+
+		content = rs.generateMarkdown(thriftRel, thriftItems, thriftDeps, thriftBranches, thriftImages, thriftFeatures, rel.Version)
 	}
 
 	if format == "html" {
@@ -412,7 +528,7 @@ func (rs *ReleaseService) Export(releaseID, snapshotID, format string) (string, 
 	return content, version, nil
 }
 
-func (rs *ReleaseService) generateMarkdown(rel *center.Release, items []*center.ReleaseItem, deployments []*center.Deployment, version string) string {
+func (rs *ReleaseService) generateMarkdown(rel *center.Release, items []*center.ReleaseItem, deployments []*center.Deployment, branches []*center.ReleaseBranch, images []*center.DockerImage, features []*center.ReleaseFeature, version string) string {
 	var sb strings.Builder
 
 	sb.WriteString("# ")
@@ -429,6 +545,17 @@ func (rs *ReleaseService) generateMarkdown(rel *center.Release, items []*center.
 		sb.WriteString("\n\n")
 	}
 
+	if len(features) > 0 {
+		sb.WriteString(fmt.Sprintf("## 功能说明（%d）\n\n", len(features)))
+		for i, f := range features {
+			sb.WriteString(fmt.Sprintf("### %d. %s\n\n", i+1, f.Title))
+			if f.Content != "" {
+				sb.WriteString(f.Content)
+				sb.WriteString("\n\n")
+			}
+		}
+	}
+
 	if len(deployments) > 0 {
 		sb.WriteString("## 部署地址\n\n")
 		sb.WriteString("| 功能模块 | 地址 | 说明 |\n")
@@ -439,6 +566,34 @@ func (rs *ReleaseService) generateMarkdown(rel *center.Release, items []*center.
 				desc = "-"
 			}
 			sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", d.ModuleName, d.Address, desc))
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(branches) > 0 {
+		sb.WriteString("## 分支信息\n\n")
+		sb.WriteString("| 分支名 | 类型 | 父分支 |\n")
+		sb.WriteString("|--------|------|--------|\n")
+		for _, b := range branches {
+			parent := b.ParentBranch
+			if parent == "" {
+				parent = "-"
+			}
+			sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", b.BranchName, b.BranchType, parent))
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(images) > 0 {
+		sb.WriteString("## Docker 镜像\n\n")
+		sb.WriteString("| 镜像名称 | Tag | Registry | 来源 |\n")
+		sb.WriteString("|----------|-----|----------|------|\n")
+		for _, img := range images {
+			registry := img.Registry
+			if registry == "" {
+				registry = "-"
+			}
+			sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", img.ImageName, img.ImageTag, registry, img.Source))
 		}
 		sb.WriteString("\n")
 	}
@@ -460,49 +615,49 @@ func (rs *ReleaseService) generateMarkdown(rel *center.Release, items []*center.
 		sb.WriteString("| # | 标题 | 严重程度 | 优先级 | 状态 | 指派给 |\n")
 		sb.WriteString("|---|------|---------|--------|------|--------|\n")
 		for _, b := range bugs {
-		link := "-"
-		zentaoURL := ""
-		zentaoID := 0
-		if b.ZentaoUrl != nil {
-			zentaoURL = *b.ZentaoUrl
+			link := "-"
+			zentaoURL := ""
+			zentaoID := 0
+			if b.ZentaoUrl != nil {
+				zentaoURL = *b.ZentaoUrl
+			}
+			if b.ZentaoId != nil {
+				zentaoID = int(*b.ZentaoId)
+			}
+			if zentaoURL != "" {
+				link = fmt.Sprintf("[%d](%s)", zentaoID, zentaoURL)
+			} else if zentaoID > 0 {
+				link = fmt.Sprintf("%d", zentaoID)
+			}
+			title := b.GetTitle()
+			if title == "" {
+				title = "-"
+			}
+			sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s |\n",
+				link, title, b.GetSeverity(), b.GetPriority(), b.GetStatus(), b.GetAssignedTo()))
 		}
-		if b.ZentaoId != nil {
-			zentaoID = int(*b.ZentaoId)
-		}
-		if zentaoURL != "" {
-			link = fmt.Sprintf("[%d](%s)", zentaoID, zentaoURL)
-		} else if zentaoID > 0 {
-			link = fmt.Sprintf("%d", zentaoID)
-		}
-		title := b.GetTitle()
-		if title == "" {
-			title = "-"
-		}
-		sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s |\n",
-			link, title, b.GetSeverity(), b.GetPriority(), b.GetStatus(), b.GetAssignedTo()))
+		sb.WriteString("\n")
 	}
-	sb.WriteString("\n")
-}
 
-if len(tasks) > 0 {
-	sb.WriteString(fmt.Sprintf("## 任务完成（%d）\n\n", len(tasks)))
-	sb.WriteString("| # | 标题 | 优先级 | 状态 | 指派给 |\n")
-	sb.WriteString("|---|------|--------|------|--------|\n")
-	for _, t := range tasks {
-		link := "-"
-		zentaoURL := ""
-		zentaoID := 0
-		if t.ZentaoUrl != nil {
-			zentaoURL = *t.ZentaoUrl
-		}
-		if t.ZentaoId != nil {
-			zentaoID = int(*t.ZentaoId)
-		}
-		if zentaoURL != "" {
-			link = fmt.Sprintf("[%d](%s)", zentaoID, zentaoURL)
-		} else if zentaoID > 0 {
-			link = fmt.Sprintf("%d", zentaoID)
-		}
+	if len(tasks) > 0 {
+		sb.WriteString(fmt.Sprintf("## 任务完成（%d）\n\n", len(tasks)))
+		sb.WriteString("| # | 标题 | 优先级 | 状态 | 指派给 |\n")
+		sb.WriteString("|---|------|--------|------|--------|\n")
+		for _, t := range tasks {
+			link := "-"
+			zentaoURL := ""
+			zentaoID := 0
+			if t.ZentaoUrl != nil {
+				zentaoURL = *t.ZentaoUrl
+			}
+			if t.ZentaoId != nil {
+				zentaoID = int(*t.ZentaoId)
+			}
+			if zentaoURL != "" {
+				link = fmt.Sprintf("[%d](%s)", zentaoID, zentaoURL)
+			} else if zentaoID > 0 {
+				link = fmt.Sprintf("%d", zentaoID)
+			}
 			title := t.GetTitle()
 			if title == "" {
 				title = "-"
@@ -601,21 +756,6 @@ func (rs *ReleaseService) simpleMDToHTML(md string) string {
 	return html.String()
 }
 
-func (rs *ReleaseService) enrichRelease(rel *center.Release, project *center.Project) {
-	rel.ProjectName = project.Name
-}
-
-func (rs *ReleaseService) fillCounts(rel *center.Release) {
-	total, bugs, tasks, notes, err := rs.itemStore.CountByType(rel.ID)
-	if err != nil {
-		return
-	}
-	rel.ItemCount = int32(total)
-	rel.BugCount = int32(bugs)
-	rel.TaskCount = int32(tasks)
-	rel.NoteCount = int32(notes)
-}
-
 type ZentaoProxyService struct {
 	client *zentao.Client
 }
@@ -668,4 +808,16 @@ func (zs *ZentaoProxyService) GetProjects(productID int) (json.RawMessage, error
 
 func (zs *ZentaoProxyService) GetExecutions(projectID int) (json.RawMessage, error) {
 	return zs.client.GetExecutions(projectID)
+}
+
+func (rs *ReleaseService) GetRaw(keyword string) (*model.Release, error) {
+	return rs.releaseStore.GetByID(keyword)
+}
+
+func (rs *ReleaseService) GetRawItems(releaseKeyword string) ([]*model.ReleaseItem, error) {
+	return rs.itemStore.ListByRelease(releaseKeyword)
+}
+
+func (rs *ReleaseService) GetDeployments(releaseKeyword string) ([]*model.ReleaseDeployment, error) {
+	return rs.deploymentStore.ListByRelease(releaseKeyword)
 }

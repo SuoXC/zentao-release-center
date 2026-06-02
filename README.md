@@ -126,6 +126,16 @@ log:
 | GET | `/api/zentao/tasks` | 禅道 Task 列表 |
 | GET | `/api/health` | 健康检查 |
 
+## 开源地址
+
+- GitHub: https://github.com/yi-nology/zentao-release-center
+
+## 版权信息
+
+版权所有 © 2024 murphyyi
+
+官网: https://project.murphyyi.com
+
 ## License
 
 MIT

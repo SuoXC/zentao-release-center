@@ -215,3 +215,107 @@ func _updatedeploymentMw() []app.HandlerFunc {
 	// your code...
 	return nil
 }
+
+func _projects1Mw() []app.HandlerFunc {
+	return nil
+}
+
+func _listreposMw() []app.HandlerFunc {
+	return nil
+}
+
+func _addrepoMw() []app.HandlerFunc {
+	return nil
+}
+
+func _deleterepoMw() []app.HandlerFunc {
+	return nil
+}
+
+func _release_branchesMw() []app.HandlerFunc {
+	return nil
+}
+
+func _createreleasebranchMw() []app.HandlerFunc {
+	return nil
+}
+
+func _createfeaturebranchMw() []app.HandlerFunc {
+	return nil
+}
+
+func _deletebranchMw() []app.HandlerFunc {
+	return nil
+}
+
+func _updatebranchMw() []app.HandlerFunc {
+	return nil
+}
+
+func _listbranchesMw() []app.HandlerFunc {
+	return nil
+}
+
+func _docker_imagesMw() []app.HandlerFunc {
+	return nil
+}
+
+func _adddockerimageMw() []app.HandlerFunc {
+	return nil
+}
+
+func _deletedockerimageMw() []app.HandlerFunc {
+	return nil
+}
+
+func _listdockerimagesMw() []app.HandlerFunc {
+	return nil
+}
+
+func _gitlabMw() []app.HandlerFunc {
+	return nil
+}
+
+func _searchgitlabprojectsMw() []app.HandlerFunc {
+	return nil
+}
+
+func _listgitlabbranchesMw() []app.HandlerFunc {
+	return nil
+}
+
+func _gitlabwebhookMw() []app.HandlerFunc {
+	return nil
+}
+
+func _listdockerimagepoolMw() []app.HandlerFunc {
+	return nil
+}
+
+func _cibuildMw() []app.HandlerFunc {
+	return nil
+}
+
+func _featuresMw() []app.HandlerFunc {
+	return nil
+}
+
+func _addfeatureMw() []app.HandlerFunc {
+	return nil
+}
+
+func _updatefeatureMw() []app.HandlerFunc {
+	return nil
+}
+
+func _deletefeatureMw() []app.HandlerFunc {
+	return nil
+}
+
+func _listfeaturesMw() []app.HandlerFunc {
+	return nil
+}
+
+func _reorderfeaturesMw() []app.HandlerFunc {
+	return nil
+}

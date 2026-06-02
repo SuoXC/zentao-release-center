@@ -61,5 +61,41 @@ func Register(r *server.Hertz) {
 			_zentao.GET("/projects", append(_getzentaoprojectsMw(), center.GetZentaoProjects)...)
 			_zentao.GET("/tasks", append(_getzentaotasksMw(), center.GetZentaoTasks)...)
 		}
+		{
+			_projects1 := _api.Group("/projects", _projects1Mw()...)
+			_projects1.GET("/repos", append(_listreposMw(), center.ListRepos)...)
+			_projects1.POST("/repos", append(_addrepoMw(), center.AddRepo)...)
+			_projects1.POST("/repos/delete", append(_deleterepoMw(), center.DeleteRepo)...)
+		}
+		{
+			_release_branches := _api.Group("/release-branches", _release_branchesMw()...)
+			_release_branches.POST("", append(_createreleasebranchMw(), center.CreateReleaseBranch)...)
+			_release_branches.POST("/feature", append(_createfeaturebranchMw(), center.CreateFeatureBranch)...)
+			_release_branches.POST("/delete", append(_deletebranchMw(), center.DeleteBranch)...)
+			_release_branches.POST("/update", append(_updatebranchMw(), center.UpdateBranch)...)
+			_release_branches.GET("", append(_listbranchesMw(), center.ListBranches)...)
+		}
+		{
+			_docker_images := _api.Group("/docker-images", _docker_imagesMw()...)
+			_docker_images.POST("", append(_adddockerimageMw(), center.AddDockerImage)...)
+			_docker_images.POST("/delete", append(_deletedockerimageMw(), center.DeleteDockerImage)...)
+			_docker_images.GET("", append(_listdockerimagesMw(), center.ListDockerImages)...)
+			_docker_images.GET("/pool", append(_listdockerimagepoolMw(), center.ListDockerImagePool)...)
+		}
+		{
+			_gitlab := _api.Group("/gitlab", _gitlabMw()...)
+			_gitlab.GET("/search", append(_searchgitlabprojectsMw(), center.SearchGitlabProjects)...)
+			_gitlab.GET("/branches", append(_listgitlabbranchesMw(), center.ListGitlabBranches)...)
+		}
+		{
+			_features := _api.Group("/features", _featuresMw()...)
+			_features.POST("", append(_addfeatureMw(), center.AddFeature)...)
+			_features.POST("/update", append(_updatefeatureMw(), center.UpdateFeature)...)
+			_features.POST("/delete", append(_deletefeatureMw(), center.DeleteFeature)...)
+			_features.GET("", append(_listfeaturesMw(), center.ListFeatures)...)
+			_features.POST("/reorder", append(_reorderfeaturesMw(), center.ReorderFeatures)...)
+		}
+		_api.POST("/webhook/gitlab", append(_gitlabwebhookMw(), center.GitlabWebhook)...)
+		_api.POST("/ci/build", append(_cibuildMw(), center.CIBuild)...)
 	}
 }

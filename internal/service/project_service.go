@@ -4,37 +4,52 @@ import (
 	"fmt"
 
 	center "github.com/yi-nology/zentao-release-center/biz/model/release/center"
+	"github.com/yi-nology/zentao-release-center/internal/mapper"
+	"github.com/yi-nology/zentao-release-center/internal/model"
 	"github.com/yi-nology/zentao-release-center/internal/store"
+	"gorm.io/gorm"
 )
 
 type ProjectService struct {
-	projectStore *store.ProjectStore
+	store *store.ProjectStore
 }
 
-func NewProjectService(s *store.Store) *ProjectService {
-	return &ProjectService{projectStore: store.NewProjectStore(s)}
+func NewProjectService(db *gorm.DB) *ProjectService {
+	return &ProjectService{store: store.NewProjectStore(db)}
 }
 
 func (ps *ProjectService) Create(req *center.CreateProjectReq) (*center.Project, error) {
 	if req.Name == "" {
 		return nil, fmt.Errorf("name is required")
 	}
-	return ps.projectStore.Create(req.Name, req.GetDescription(), int(req.GetZentaoProductId()), int(req.GetZentaoProjectId()), req.GetZentaoProductName(), req.GetZentaoProjectName())
+	p, err := ps.store.Create(req.Name, req.GetDescription(), int(req.GetZentaoProductId()), int(req.GetZentaoProjectId()), req.GetZentaoProductName(), req.GetZentaoProjectName())
+	if err != nil {
+		return nil, err
+	}
+	return mapper.ProjectToThrift(p), nil
 }
 
-func (ps *ProjectService) Get(id string) (*center.Project, error) {
-	p, err := ps.projectStore.GetByID(id)
+func (ps *ProjectService) Get(keyword string) (*center.Project, error) {
+	p, err := ps.store.GetByID(keyword)
 	if err != nil {
 		return nil, err
 	}
 	if p == nil {
 		return nil, fmt.Errorf("project not found")
 	}
-	return p, nil
+	return mapper.ProjectToThrift(p), nil
 }
 
 func (ps *ProjectService) List(status string, page, pageSize int) ([]*center.Project, int, error) {
-	return ps.projectStore.List(status, page, pageSize)
+	projects, total, err := ps.store.List(status, page, pageSize)
+	if err != nil {
+		return nil, 0, err
+	}
+	result := make([]*center.Project, len(projects))
+	for i, p := range projects {
+		result[i] = mapper.ProjectToThrift(p)
+	}
+	return result, total, nil
 }
 
 func (ps *ProjectService) Update(req *center.UpdateProjectReq) error {
@@ -63,9 +78,13 @@ func (ps *ProjectService) Update(req *center.UpdateProjectReq) error {
 	if req.IsSetStatus() {
 		fields["status"] = req.Status
 	}
-	return ps.projectStore.Update(req.ID, fields)
+	return ps.store.Update(req.ID, fields)
 }
 
-func (ps *ProjectService) Delete(id string) error {
-	return ps.projectStore.Delete(id)
+func (ps *ProjectService) Delete(keyword string) error {
+	return ps.store.Delete(keyword)
+}
+
+func (ps *ProjectService) GetRaw(keyword string) (*model.Project, error) {
+	return ps.store.GetByID(keyword)
 }

@@ -1,232 +1,106 @@
 package store
 
 import (
-	"database/sql"
-	"time"
-
 	"github.com/google/uuid"
-	center "github.com/yi-nology/zentao-release-center/biz/model/release/center"
+	"github.com/yi-nology/zentao-release-center/internal/model"
+	"gorm.io/gorm"
 )
 
 type ItemStore struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-func NewItemStore(s *Store) *ItemStore {
-	return &ItemStore{db: s.DB()}
+func NewItemStore(db *gorm.DB) *ItemStore {
+	return &ItemStore{db: db}
 }
 
-func (is *ItemStore) DB() *sql.DB {
-	return is.db
-}
+func (is *ItemStore) Add(releaseKeyword, itemType string, zentaoID int, zentaoType, title, severity, priority, status, assignedTo, resolvedBy, zentaoURL, steps, noteTitle, noteContent string) (*model.ReleaseItem, error) {
+	var maxOrder int
+	is.db.Model(&model.ReleaseItem{}).Where("release_keyword = ?", releaseKeyword).Select("COALESCE(MAX(sort_order), 0)").Scan(&maxOrder)
 
-func strPtr(s string) *string { return &s }
-func int32Ptr(i int32) *int32  { return &i }
-
-func scanItem(row *sql.Row) (*center.ReleaseItem, error) {
-	item := &center.ReleaseItem{}
-	var zentaoID sql.NullInt32
-	var zentaoType, title, severity, priority, status, assignedTo, resolvedBy, zentaoURL, steps, noteTitle, noteContent sql.NullString
-	err := row.Scan(&item.ID, &item.ReleaseId, &item.ItemType, &item.SortOrder,
-		&zentaoID, &zentaoType, &title, &severity, &priority, &status, &assignedTo, &resolvedBy, &zentaoURL, &steps,
-		&noteTitle, &noteContent, &item.CreatedAt, &item.UpdatedAt)
-	if err == sql.ErrNoRows {
-		return nil, nil
+	item := &model.ReleaseItem{
+		Keyword:        uuid.New().String(),
+		ReleaseKeyword: releaseKeyword,
+		ItemType:       itemType,
+		SortOrder:      maxOrder + 1,
+		ZentaoID:       zentaoID,
+		ZentaoType:     zentaoType,
+		Title:          title,
+		Severity:       severity,
+		Priority:       priority,
+		Status:         status,
+		AssignedTo:     assignedTo,
+		ResolvedBy:     resolvedBy,
+		ZentaoURL:      zentaoURL,
+		Steps:          steps,
+		NoteTitle:      noteTitle,
+		NoteContent:    noteContent,
 	}
-	if err != nil {
+	if err := is.db.Create(item).Error; err != nil {
 		return nil, err
-	}
-	if zentaoID.Valid {
-		item.ZentaoId = int32Ptr(zentaoID.Int32)
-	}
-	if zentaoType.Valid {
-		item.ZentaoType = strPtr(zentaoType.String)
-	}
-	if title.Valid {
-		item.Title = strPtr(title.String)
-	}
-	if severity.Valid {
-		item.Severity = strPtr(severity.String)
-	}
-	if priority.Valid {
-		item.Priority = strPtr(priority.String)
-	}
-	if status.Valid {
-		item.Status = strPtr(status.String)
-	}
-	if assignedTo.Valid {
-		item.AssignedTo = strPtr(assignedTo.String)
-	}
-	if resolvedBy.Valid {
-		item.ResolvedBy = strPtr(resolvedBy.String)
-	}
-	if zentaoURL.Valid {
-		item.ZentaoUrl = strPtr(zentaoURL.String)
-	}
-	if steps.Valid {
-		item.Steps = strPtr(steps.String)
-	}
-	if noteTitle.Valid {
-		item.NoteTitle = strPtr(noteTitle.String)
-	}
-	if noteContent.Valid {
-		item.NoteContent = strPtr(noteContent.String)
 	}
 	return item, nil
 }
 
-func (is *ItemStore) Add(releaseID, itemType string, zentaoID int, zentaoType, title, severity, priority, status, assignedTo, resolvedBy, zentaoURL, steps, noteTitle, noteContent string) (*center.ReleaseItem, error) {
-	now := time.Now().Format(time.DateTime)
-	id := uuid.New().String()
-
-	var maxOrder sql.NullInt32
-	is.db.QueryRow("SELECT COALESCE(MAX(sort_order), 0) FROM release_items WHERE release_id = ?", releaseID).Scan(&maxOrder)
-	sortOrder := int(maxOrder.Int32) + 1
-
-	_, err := is.db.Exec(`INSERT INTO release_items (id, release_id, item_type, sort_order, zentao_id, zentao_type, title, severity, priority, status, assigned_to, resolved_by, zentao_url, steps, note_title, note_content, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, releaseID, itemType, sortOrder, zentaoID, zentaoType, title, severity, priority, status, assignedTo, resolvedBy, zentaoURL, steps, noteTitle, noteContent, now, now)
-	if err != nil {
-		return nil, err
-	}
-	return is.GetByID(id)
-}
-
-func (is *ItemStore) ExistsByZentaoID(releaseID string, zentaoID int) (bool, error) {
-	var count int
-	err := is.db.QueryRow("SELECT COUNT(*) FROM release_items WHERE release_id = ? AND zentao_id = ?", releaseID, zentaoID).Scan(&count)
+func (is *ItemStore) ExistsByZentaoID(releaseKeyword string, zentaoID int) (bool, error) {
+	var count int64
+	err := is.db.Model(&model.ReleaseItem{}).Where("release_keyword = ? AND zentao_id = ?", releaseKeyword, zentaoID).Count(&count).Error
 	return count > 0, err
 }
 
-func (is *ItemStore) AddBatch(tx *sql.Tx, releaseID string, items []struct {
+func (is *ItemStore) AddBatch(releaseKeyword string, items []struct {
 	ItemType, ZentaoType, Title, Severity, Priority, Status, AssignedTo, ResolvedBy, ZentaoURL, Steps, NoteTitle, NoteContent string
 	ZentaoID int
-}) ([]*center.ReleaseItem, error) {
-	var maxOrder sql.NullInt32
-	tx.QueryRow("SELECT COALESCE(MAX(sort_order), 0) FROM release_items WHERE release_id = ?", releaseID).Scan(&maxOrder)
-	sortOrder := int(maxOrder.Int32)
+}) ([]*model.ReleaseItem, error) {
+	var maxOrder int
+	is.db.Model(&model.ReleaseItem{}).Where("release_keyword = ?", releaseKeyword).Select("COALESCE(MAX(sort_order), 0)").Scan(&maxOrder)
 
-	var result []*center.ReleaseItem
-	now := time.Now().Format(time.DateTime)
+	var result []*model.ReleaseItem
 	for _, item := range items {
-		sortOrder++
-		id := uuid.New().String()
-		_, err := tx.Exec(`INSERT INTO release_items (id, release_id, item_type, sort_order, zentao_id, zentao_type, title, severity, priority, status, assigned_to, resolved_by, zentao_url, steps, note_title, note_content, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			id, releaseID, item.ItemType, sortOrder, item.ZentaoID, item.ZentaoType, item.Title, item.Severity, item.Priority, item.Status, item.AssignedTo, item.ResolvedBy, item.ZentaoURL, item.Steps, item.NoteTitle, item.NoteContent, now, now)
-		if err != nil {
+		maxOrder++
+		m := &model.ReleaseItem{
+			Keyword:        uuid.New().String(),
+			ReleaseKeyword: releaseKeyword,
+			ItemType:       item.ItemType,
+			SortOrder:      maxOrder,
+			ZentaoID:       item.ZentaoID,
+			ZentaoType:     item.ZentaoType,
+			Title:          item.Title,
+			Severity:       item.Severity,
+			Priority:       item.Priority,
+			Status:         item.Status,
+			AssignedTo:     item.AssignedTo,
+			ResolvedBy:     item.ResolvedBy,
+			ZentaoURL:      item.ZentaoURL,
+			Steps:          item.Steps,
+			NoteTitle:      item.NoteTitle,
+			NoteContent:    item.NoteContent,
+		}
+		if err := is.db.Create(m).Error; err != nil {
 			return nil, err
 		}
-		created := &center.ReleaseItem{
-			ID:        id,
-			ReleaseId: releaseID,
-			ItemType:  item.ItemType,
-			SortOrder: int32(sortOrder),
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
-		if item.ZentaoID > 0 {
-			v := int32(item.ZentaoID)
-			created.ZentaoId = &v
-		}
-		if item.ZentaoType != "" {
-			created.ZentaoType = &item.ZentaoType
-		}
-		if item.Title != "" {
-			created.Title = &item.Title
-		}
-		if item.Severity != "" {
-			created.Severity = &item.Severity
-		}
-		if item.Priority != "" {
-			created.Priority = &item.Priority
-		}
-		if item.Status != "" {
-			created.Status = &item.Status
-		}
-		if item.AssignedTo != "" {
-			created.AssignedTo = &item.AssignedTo
-		}
-		if item.ResolvedBy != "" {
-			created.ResolvedBy = &item.ResolvedBy
-		}
-		if item.ZentaoURL != "" {
-			created.ZentaoUrl = &item.ZentaoURL
-		}
-		if item.Steps != "" {
-			created.Steps = &item.Steps
-		}
-		if item.NoteTitle != "" {
-			created.NoteTitle = &item.NoteTitle
-		}
-		if item.NoteContent != "" {
-			created.NoteContent = &item.NoteContent
-		}
-		result = append(result, created)
+		result = append(result, m)
 	}
 	return result, nil
 }
 
-func (is *ItemStore) GetByID(id string) (*center.ReleaseItem, error) {
-	return scanItem(is.db.QueryRow(`SELECT id, release_id, item_type, sort_order, zentao_id, zentao_type, title, severity, priority, status, assigned_to, resolved_by, zentao_url, steps, note_title, note_content, created_at, updated_at FROM release_items WHERE id = ?`, id))
-}
-
-func (is *ItemStore) ListByRelease(releaseID string) ([]*center.ReleaseItem, error) {
-	rows, err := is.db.Query(`SELECT id, release_id, item_type, sort_order, zentao_id, zentao_type, title, severity, priority, status, assigned_to, resolved_by, zentao_url, steps, note_title, note_content, created_at, updated_at FROM release_items WHERE release_id = ? ORDER BY sort_order ASC, created_at ASC`, releaseID)
-	if err != nil {
+func (is *ItemStore) GetByID(keyword string) (*model.ReleaseItem, error) {
+	var item model.ReleaseItem
+	if err := is.db.Where("keyword = ?", keyword).First(&item).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
-	defer rows.Close()
+	return &item, nil
+}
 
-	var list []*center.ReleaseItem
-	for rows.Next() {
-		item := &center.ReleaseItem{}
-		var zentaoID sql.NullInt32
-		var zentaoType, title, severity, priority, status, assignedTo, resolvedBy, zentaoURL, steps, noteTitle, noteContent sql.NullString
-		if err := rows.Scan(&item.ID, &item.ReleaseId, &item.ItemType, &item.SortOrder,
-			&zentaoID, &zentaoType, &title, &severity, &priority, &status, &assignedTo, &resolvedBy, &zentaoURL, &steps,
-			&noteTitle, &noteContent, &item.CreatedAt, &item.UpdatedAt); err != nil {
-			return nil, err
-		}
-		if zentaoID.Valid {
-			item.ZentaoId = int32Ptr(zentaoID.Int32)
-		}
-		if zentaoType.Valid {
-			item.ZentaoType = strPtr(zentaoType.String)
-		}
-		if title.Valid {
-			item.Title = strPtr(title.String)
-		}
-		if severity.Valid {
-			item.Severity = strPtr(severity.String)
-		}
-		if priority.Valid {
-			item.Priority = strPtr(priority.String)
-		}
-		if status.Valid {
-			item.Status = strPtr(status.String)
-		}
-		if assignedTo.Valid {
-			item.AssignedTo = strPtr(assignedTo.String)
-		}
-		if resolvedBy.Valid {
-			item.ResolvedBy = strPtr(resolvedBy.String)
-		}
-		if zentaoURL.Valid {
-			item.ZentaoUrl = strPtr(zentaoURL.String)
-		}
-		if steps.Valid {
-			item.Steps = strPtr(steps.String)
-		}
-		if noteTitle.Valid {
-			item.NoteTitle = strPtr(noteTitle.String)
-		}
-		if noteContent.Valid {
-			item.NoteContent = strPtr(noteContent.String)
-		}
-		list = append(list, item)
+func (is *ItemStore) ListByRelease(releaseKeyword string) ([]*model.ReleaseItem, error) {
+	var items []*model.ReleaseItem
+	if err := is.db.Where("release_keyword = ?", releaseKeyword).Order("sort_order ASC, created_at ASC").Find(&items).Error; err != nil {
+		return nil, err
 	}
-	return list, nil
+	return items, nil
 }
 
 var itemAllowedFields = map[string]bool{
@@ -235,73 +109,59 @@ var itemAllowedFields = map[string]bool{
 	"note_title": true, "note_content": true, "sort_order": true,
 }
 
-func (is *ItemStore) Update(id string, fields map[string]interface{}) error {
+func (is *ItemStore) Update(keyword string, fields map[string]interface{}) error {
 	if len(fields) == 0 {
 		return nil
 	}
-	fields["updated_at"] = time.Now().Format(time.DateTime)
-	setClauses := ""
-	args := []interface{}{}
+	allowed := make(map[string]interface{})
 	for k, v := range fields {
-		if !itemAllowedFields[k] && k != "updated_at" {
-			continue
+		if itemAllowedFields[k] {
+			allowed[k] = v
 		}
-		if setClauses != "" {
-			setClauses += ", "
-		}
-		setClauses += k + " = ?"
-		args = append(args, v)
 	}
-	if setClauses == "" {
+	if len(allowed) == 0 {
 		return nil
 	}
-	args = append(args, id)
-	_, err := is.db.Exec("UPDATE release_items SET "+setClauses+" WHERE id = ?", args...)
-	return err
+	return is.db.Model(&model.ReleaseItem{}).Where("keyword = ?", keyword).Updates(allowed).Error
 }
 
-func (is *ItemStore) Delete(id string) error {
-	_, err := is.db.Exec("DELETE FROM release_items WHERE id = ?", id)
-	return err
+func (is *ItemStore) Delete(keyword string) error {
+	return is.db.Where("keyword = ?", keyword).Delete(&model.ReleaseItem{}).Error
 }
 
 func (is *ItemStore) Reorder(items []struct {
-	ID        string
+	Keyword   string
 	SortOrder int
 }) error {
-	tx, err := is.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	for _, item := range items {
-		if _, err := tx.Exec("UPDATE release_items SET sort_order = ? WHERE id = ?", item.SortOrder, item.ID); err != nil {
-			return err
+	return is.db.Transaction(func(tx *gorm.DB) error {
+		for _, item := range items {
+			if err := tx.Model(&model.ReleaseItem{}).Where("keyword = ?", item.Keyword).Update("sort_order", item.SortOrder).Error; err != nil {
+				return err
+			}
 		}
-	}
-	return tx.Commit()
+		return nil
+	})
 }
 
-func (is *ItemStore) CountByType(releaseID string) (total, bugs, tasks, notes int, err error) {
-	rows, err := is.db.Query("SELECT item_type, COUNT(*) FROM release_items WHERE release_id = ? GROUP BY item_type", releaseID)
-	if err != nil {
-		return 0, 0, 0, 0, err
+func (is *ItemStore) CountByType(releaseKeyword string) (total, bugs, tasks, notes int, err error) {
+	type result struct {
+		ItemType string
+		Count    int
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var itemType string
-		var count int
-		if err := rows.Scan(&itemType, &count); err != nil {
-			return 0, 0, 0, 0, err
-		}
-		total += count
-		switch itemType {
+	var results []result
+	if err = is.db.Model(&model.ReleaseItem{}).Where("release_keyword = ?", releaseKeyword).
+		Select("item_type, COUNT(*) as count").Group("item_type").Scan(&results).Error; err != nil {
+		return
+	}
+	for _, r := range results {
+		total += r.Count
+		switch r.ItemType {
 		case "bug":
-			bugs = count
+			bugs = r.Count
 		case "task":
-			tasks = count
+			tasks = r.Count
 		case "note":
-			notes = count
+			notes = r.Count
 		}
 	}
 	return

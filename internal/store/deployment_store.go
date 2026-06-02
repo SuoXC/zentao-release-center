@@ -1,128 +1,96 @@
 package store
 
 import (
-	"database/sql"
-	"time"
-
 	"github.com/google/uuid"
-	center "github.com/yi-nology/zentao-release-center/biz/model/release/center"
+	"github.com/yi-nology/zentao-release-center/internal/model"
+	"gorm.io/gorm"
 )
 
 type DeploymentStore struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-func NewDeploymentStore(s *Store) *DeploymentStore {
-	return &DeploymentStore{db: s.DB()}
+func NewDeploymentStore(db *gorm.DB) *DeploymentStore {
+	return &DeploymentStore{db: db}
 }
 
-func (ds *DeploymentStore) Create(releaseID, moduleName, address, description string) (*center.Deployment, error) {
-	now := time.Now().Format(time.DateTime)
-	id := uuid.New().String()
+func (ds *DeploymentStore) Create(releaseKeyword, moduleName, address, description string) (*model.ReleaseDeployment, error) {
+	var maxOrder int
+	ds.db.Model(&model.ReleaseDeployment{}).Where("release_keyword = ?", releaseKeyword).Select("COALESCE(MAX(sort_order), 0)").Scan(&maxOrder)
 
-	var maxOrder sql.NullInt32
-	ds.db.QueryRow("SELECT COALESCE(MAX(sort_order), 0) FROM release_deployments WHERE release_id = ?", releaseID).Scan(&maxOrder)
-	sortOrder := int(maxOrder.Int32) + 1
-
-	_, err := ds.db.Exec(`INSERT INTO release_deployments (id, release_id, module_name, address, description, sort_order, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, releaseID, moduleName, address, description, sortOrder, now, now)
-	if err != nil {
+	d := &model.ReleaseDeployment{
+		Keyword:        uuid.New().String(),
+		ReleaseKeyword: releaseKeyword,
+		ModuleName:     moduleName,
+		Address:        address,
+		Description:    description,
+		SortOrder:      maxOrder + 1,
+	}
+	if err := ds.db.Create(d).Error; err != nil {
 		return nil, err
 	}
-	return ds.GetByID(id)
-}
-
-func (ds *DeploymentStore) GetByID(id string) (*center.Deployment, error) {
-	d := &center.Deployment{}
-	var desc sql.NullString
-	err := ds.db.QueryRow(`SELECT id, release_id, module_name, address, description, sort_order, created_at, updated_at FROM release_deployments WHERE id = ?`, id).
-		Scan(&d.ID, &d.ReleaseId, &d.ModuleName, &d.Address, &desc, &d.SortOrder, &d.CreatedAt, &d.UpdatedAt)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	d.Description = desc.String
 	return d, nil
 }
 
-func (ds *DeploymentStore) ListByRelease(releaseID string) ([]*center.Deployment, error) {
-	rows, err := ds.db.Query(`SELECT id, release_id, module_name, address, description, sort_order, created_at, updated_at FROM release_deployments WHERE release_id = ? ORDER BY sort_order ASC, created_at ASC`, releaseID)
-	if err != nil {
+func (ds *DeploymentStore) GetByID(keyword string) (*model.ReleaseDeployment, error) {
+	var d model.ReleaseDeployment
+	if err := ds.db.Where("keyword = ?", keyword).First(&d).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
-	defer rows.Close()
+	return &d, nil
+}
 
-	var list []*center.Deployment
-	for rows.Next() {
-		d := &center.Deployment{}
-		var desc sql.NullString
-		if err := rows.Scan(&d.ID, &d.ReleaseId, &d.ModuleName, &d.Address, &desc, &d.SortOrder, &d.CreatedAt, &d.UpdatedAt); err != nil {
-			return nil, err
-		}
-		d.Description = desc.String
-		list = append(list, d)
+func (ds *DeploymentStore) ListByRelease(releaseKeyword string) ([]*model.ReleaseDeployment, error) {
+	var deps []*model.ReleaseDeployment
+	if err := ds.db.Where("release_keyword = ?", releaseKeyword).Order("sort_order ASC, created_at ASC").Find(&deps).Error; err != nil {
+		return nil, err
 	}
-	return list, nil
+	return deps, nil
 }
 
 var deploymentAllowedFields = map[string]bool{
 	"module_name": true, "address": true, "description": true, "sort_order": true,
 }
 
-func (ds *DeploymentStore) Update(id string, fields map[string]interface{}) error {
+func (ds *DeploymentStore) Update(keyword string, fields map[string]interface{}) error {
 	if len(fields) == 0 {
 		return nil
 	}
-	fields["updated_at"] = time.Now().Format(time.DateTime)
-
-	setClauses := ""
-	args := []interface{}{}
+	allowed := make(map[string]interface{})
 	for k, v := range fields {
-		if !deploymentAllowedFields[k] && k != "updated_at" {
-			continue
+		if deploymentAllowedFields[k] {
+			allowed[k] = v
 		}
-		if setClauses != "" {
-			setClauses += ", "
-		}
-		setClauses += k + " = ?"
-		args = append(args, v)
 	}
-	if setClauses == "" {
+	if len(allowed) == 0 {
 		return nil
 	}
-	args = append(args, id)
-	_, err := ds.db.Exec("UPDATE release_deployments SET "+setClauses+" WHERE id = ?", args...)
-	return err
+	return ds.db.Model(&model.ReleaseDeployment{}).Where("keyword = ?", keyword).Updates(allowed).Error
 }
 
-func (ds *DeploymentStore) Delete(id string) error {
-	_, err := ds.db.Exec("DELETE FROM release_deployments WHERE id = ?", id)
-	return err
+func (ds *DeploymentStore) Delete(keyword string) error {
+	return ds.db.Where("keyword = ?", keyword).Delete(&model.ReleaseDeployment{}).Error
 }
 
-func (ds *DeploymentStore) CountByRelease(releaseID string) (int, error) {
-	var count int
-	err := ds.db.QueryRow("SELECT COUNT(*) FROM release_deployments WHERE release_id = ?", releaseID).Scan(&count)
-	return count, err
+func (ds *DeploymentStore) CountByRelease(releaseKeyword string) (int, error) {
+	var count int64
+	err := ds.db.Model(&model.ReleaseDeployment{}).Where("release_keyword = ?", releaseKeyword).Count(&count).Error
+	return int(count), err
 }
 
 func (ds *DeploymentStore) Reorder(items []struct {
-	ID        string
+	Keyword   string
 	SortOrder int
 }) error {
-	tx, err := ds.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	for _, item := range items {
-		if _, err := tx.Exec("UPDATE release_deployments SET sort_order = ? WHERE id = ?", item.SortOrder, item.ID); err != nil {
-			return err
+	return ds.db.Transaction(func(tx *gorm.DB) error {
+		for _, item := range items {
+			if err := tx.Model(&model.ReleaseDeployment{}).Where("keyword = ?", item.Keyword).Update("sort_order", item.SortOrder).Error; err != nil {
+				return err
+			}
 		}
-	}
-	return tx.Commit()
+		return nil
+	})
 }
-

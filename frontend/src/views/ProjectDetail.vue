@@ -21,12 +21,92 @@
         <input v-model="form.version" placeholder="例如：2.1.0（可选）" />
       </div>
       <div class="form-group">
+        <label>基准分支</label>
+        <input v-model="form.parentBranch" placeholder="例如：main、develop、release/v2.0（可选）" />
+        <div style="font-size:12px;color:var(--text-tertiary);margin-top:4px">各仓库创建分支时的默认基准分支，具体可在分支管理中单独调整</div>
+      </div>
+      <div class="form-group">
         <label>概述</label>
         <textarea v-model="form.summary" placeholder="发布概述（可选）" />
       </div>
       <div class="actions">
         <button class="btn btn-primary" @click="createRelease">创建</button>
         <button class="btn" @click="showCreate = false">取消</button>
+      </div>
+    </div>
+
+    <div class="card mb-16">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3>关联 GitLab 仓库</h3>
+        <button class="btn btn-sm btn-primary" @click="openAddRepo">添加仓库</button>
+      </div>
+
+      <div v-if="showAddRepo" class="card mb-16" style="background:#f8f9fa">
+        <h4 style="margin-bottom:12px">搜索 GitLab 仓库</h4>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <input v-model="repoSearchQuery" placeholder="输入仓库名称搜索" style="flex:1" @keyup.enter="searchGitlabRepos" />
+          <button class="btn btn-sm btn-primary" @click="searchGitlabRepos">搜索</button>
+        </div>
+        <div v-if="gitlabSearchResults.length" style="max-height:200px;overflow-y:auto">
+          <div v-for="p in gitlabSearchResults" :key="p.id" style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #eee">
+            <div>
+              <div style="font-weight:500">{{ p.nameWithNamespace }}</div>
+              <div style="font-size:12px;color:#666">{{ p.pathWithNamespace }}</div>
+            </div>
+            <button class="btn btn-sm btn-primary" @click="selectRepo(p)">选择</button>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:12px">
+          <button class="btn btn-sm" @click="cancelAddRepo">取消</button>
+        </div>
+      </div>
+
+      <div v-if="showRepoConfig" class="card mb-16" style="background:#f8f9fa">
+        <h4 style="margin-bottom:12px">配置仓库</h4>
+        <div style="margin-bottom:12px">
+          <div style="font-weight:500">{{ selectedRepo?.nameWithNamespace }}</div>
+          <div style="font-size:12px;color:#666">{{ selectedRepo?.httpUrlToRepo }}</div>
+        </div>
+        <div class="form-group">
+          <label>默认分支 *</label>
+          <select v-model="repoConfig.defaultBranch" style="width:100%">
+            <option value="" disabled>请选择默认分支</option>
+            <option v-for="b in repoBranches" :key="b.name" :value="b.name">
+              {{ b.name }}{{ b.isDefault ? ' (默认)' : '' }}{{ b.isProtected ? ' 🔒' : '' }}
+            </option>
+          </select>
+          <div v-if="loadingBranches" style="font-size:12px;color:var(--text-tertiary);margin-top:4px">
+            <span class="loading-spinner"></span> 加载分支中...
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" @click="confirmAddRepo" :disabled="!repoConfig.defaultBranch">确认添加</button>
+          <button class="btn" @click="cancelAddRepo">取消</button>
+        </div>
+      </div>
+
+      <table class="data-table" v-if="repos.length">
+        <thead>
+          <tr>
+            <th>仓库名称</th>
+            <th>GitLab 项目 ID</th>
+            <th>默认分支</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in repos" :key="r.id">
+            <td><a :href="r.repoUrl" target="_blank" style="color:var(--primary)">{{ r.repoName }}</a></td>
+            <td>{{ r.gitlabProjectId }}</td>
+            <td>{{ r.defaultBranch }}</td>
+            <td>
+              <button class="btn btn-sm btn-danger" @click="deleteRepo(r.id)">移除</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-else class="empty-state">
+        <p>暂未关联仓库</p>
       </div>
     </div>
 
@@ -74,15 +154,25 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { projectApi, releaseApi } from '../api'
-import type { Project, Release } from '../api'
+import { projectApi, releaseApi, repoApi, gitlabApi } from '../api'
+import type { Project, Release, ProjectRepo, GitlabProject, GitlabBranch } from '../api'
 
 const route = useRoute()
 const project = ref<Project | null>(null)
 const releases = ref<Release[]>([])
+const repos = ref<ProjectRepo[]>([])
 const showCreate = ref(false)
-const form = ref({ name: '', version: '', summary: '' })
+const showAddRepo = ref(false)
+const showRepoConfig = ref(false)
+const form = ref({ name: '', version: '', summary: '', parentBranch: '' })
 const pageLoading = ref(false)
+const repoSearchQuery = ref('')
+const gitlabSearchResults = ref<GitlabProject[]>([])
+
+const selectedRepo = ref<GitlabProject | null>(null)
+const repoBranches = ref<GitlabBranch[]>([])
+const loadingBranches = ref(false)
+const repoConfig = ref({ defaultBranch: '' })
 
 function formatTime(t: string) {
   if (!t) return '-'
@@ -98,16 +188,88 @@ async function load() {
     project.value = pResp?.data || null
     const rResp: any = await releaseApi.list({ projectId: id })
     releases.value = rResp?.list || []
+    const reposResp: any = await repoApi.list(id)
+    repos.value = reposResp?.list || []
   } catch {} finally {
     pageLoading.value = false
   }
 }
 
+function openAddRepo() {
+  showAddRepo.value = true
+  showRepoConfig.value = false
+  selectedRepo.value = null
+  repoBranches.value = []
+  repoConfig.value = { defaultBranch: '' }
+}
+
+function cancelAddRepo() {
+  showAddRepo.value = false
+  showRepoConfig.value = false
+  selectedRepo.value = null
+  repoBranches.value = []
+  repoConfig.value = { defaultBranch: '' }
+  gitlabSearchResults.value = []
+  repoSearchQuery.value = ''
+}
+
+async function searchGitlabRepos() {
+  if (!repoSearchQuery.value) return
+  try {
+    const resp: any = await gitlabApi.search(repoSearchQuery.value)
+    gitlabSearchResults.value = resp?.list || []
+  } catch {}
+}
+
+async function selectRepo(p: GitlabProject) {
+  selectedRepo.value = p
+  showAddRepo.value = false
+  showRepoConfig.value = true
+  repoConfig.value = { defaultBranch: p.defaultBranch || '' }
+  loadingBranches.value = true
+  try {
+    const resp: any = await gitlabApi.branches(p.id)
+    repoBranches.value = resp?.list || []
+  } catch {} finally {
+    loadingBranches.value = false
+  }
+}
+
+async function confirmAddRepo() {
+  if (!selectedRepo.value || !repoConfig.value.defaultBranch) return
+  const id = route.query.id as string
+  try {
+    await repoApi.add({
+      projectId: id,
+      gitlabProjectId: selectedRepo.value.id,
+      repoUrl: selectedRepo.value.httpUrlToRepo,
+      repoName: selectedRepo.value.nameWithNamespace,
+      defaultBranch: repoConfig.value.defaultBranch,
+    })
+    cancelAddRepo()
+    await load()
+  } catch {}
+}
+
+async function deleteRepo(repoId: string) {
+  if (!confirm('确定移除此仓库关联？')) return
+  try {
+    await repoApi.delete(repoId)
+    await load()
+  } catch {}
+}
+
 async function createRelease() {
   if (!form.value.name) return alert('请输入名称')
   try {
-    await releaseApi.create({ projectId: route.query.id as string, ...form.value })
-    form.value = { name: '', version: '', summary: '' }
+    await releaseApi.create({
+      projectId: route.query.id as string,
+      name: form.value.name,
+      version: form.value.version || undefined,
+      summary: form.value.summary || undefined,
+      parentBranch: form.value.parentBranch || undefined,
+    })
+    form.value = { name: '', version: '', summary: '', parentBranch: '' }
     showCreate.value = false
     await load()
   } catch {}

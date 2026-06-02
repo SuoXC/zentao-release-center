@@ -13,6 +13,7 @@
       </nav>
       <div class="sidebar-footer">
         <span>zentao-release-center</span>
+        <span class="copyright">© 2024 murphyyi</span>
       </div>
     </aside>
     <main class="content">
@@ -78,6 +79,7 @@ html, body, #app { height: 100%; }
 .nav-item:hover { background: #334155; color: #E2E8F0; }
 .nav-item.active { background: var(--primary); color: white; }
 .sidebar-footer { padding: 12px 20px; border-top: 1px solid #334155; font-size: 11px; color: #64748B; text-align: center; }
+.sidebar-footer .copyright { display: block; margin-top: 4px; font-size: 10px; }
 .content { flex: 1; overflow-y: auto; padding: 24px; }
 
 .btn { padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); background: white; color: var(--text-primary); font-size: 13px; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }

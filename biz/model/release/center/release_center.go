@@ -2764,22 +2764,23 @@ func (p *ProjectResp) String() string {
 
 // ==================== 发布单 ====================
 type Release struct {
-	ID               string `thrift:"id,1" form:"id" json:"id" query:"id"`
-	ProjectId        string `thrift:"projectId,2" form:"projectId" json:"projectId" query:"projectId"`
-	ProjectName      string `thrift:"projectName,3" form:"projectName" json:"projectName" query:"projectName"`
-	Name             string `thrift:"name,4" form:"name" json:"name" query:"name"`
-	Version          string `thrift:"version,5" form:"version" json:"version" query:"version"`
-	Status           string `thrift:"status,6" form:"status" json:"status" query:"status"`
-	Summary          string `thrift:"summary,7" form:"summary" json:"summary" query:"summary"`
-	PublishCount     int32  `thrift:"publishCount,8" form:"publishCount" json:"publishCount" query:"publishCount"`
-	FirstPublishedAt string `thrift:"firstPublishedAt,9" form:"firstPublishedAt" json:"firstPublishedAt" query:"firstPublishedAt"`
-	LastPublishedAt  string `thrift:"lastPublishedAt,10" form:"lastPublishedAt" json:"lastPublishedAt" query:"lastPublishedAt"`
-	ItemCount        int32  `thrift:"itemCount,11" form:"itemCount" json:"itemCount" query:"itemCount"`
-	BugCount         int32  `thrift:"bugCount,12" form:"bugCount" json:"bugCount" query:"bugCount"`
-	TaskCount        int32  `thrift:"taskCount,13" form:"taskCount" json:"taskCount" query:"taskCount"`
-	NoteCount        int32  `thrift:"noteCount,14" form:"noteCount" json:"noteCount" query:"noteCount"`
-	CreatedAt        string `thrift:"createdAt,15" form:"createdAt" json:"createdAt" query:"createdAt"`
-	UpdatedAt        string `thrift:"updatedAt,16" form:"updatedAt" json:"updatedAt" query:"updatedAt"`
+	ID                string `thrift:"id,1" form:"id" json:"id" query:"id"`
+	ProjectId         string `thrift:"projectId,2" form:"projectId" json:"projectId" query:"projectId"`
+	ProjectName       string `thrift:"projectName,3" form:"projectName" json:"projectName" query:"projectName"`
+	Name              string `thrift:"name,4" form:"name" json:"name" query:"name"`
+	Version           string `thrift:"version,5" form:"version" json:"version" query:"version"`
+	Status            string `thrift:"status,6" form:"status" json:"status" query:"status"`
+	Summary           string `thrift:"summary,7" form:"summary" json:"summary" query:"summary"`
+	ParentBranch      string `thrift:"parentBranch,8" form:"parentBranch" json:"parentBranch" query:"parentBranch"`
+	PublishCount      int32  `thrift:"publishCount,9" form:"publishCount" json:"publishCount" query:"publishCount"`
+	FirstPublishedAt  string `thrift:"firstPublishedAt,10" form:"firstPublishedAt" json:"firstPublishedAt" query:"firstPublishedAt"`
+	LastPublishedAt   string `thrift:"lastPublishedAt,11" form:"lastPublishedAt" json:"lastPublishedAt" query:"lastPublishedAt"`
+	ItemCount         int32  `thrift:"itemCount,12" form:"itemCount" json:"itemCount" query:"itemCount"`
+	BugCount          int32  `thrift:"bugCount,13" form:"bugCount" json:"bugCount" query:"bugCount"`
+	TaskCount         int32  `thrift:"taskCount,14" form:"taskCount" json:"taskCount" query:"taskCount"`
+	NoteCount         int32  `thrift:"noteCount,15" form:"noteCount" json:"noteCount" query:"noteCount"`
+	CreatedAt         string `thrift:"createdAt,16" form:"createdAt" json:"createdAt" query:"createdAt"`
+	UpdatedAt         string `thrift:"updatedAt,17" form:"updatedAt" json:"updatedAt" query:"updatedAt"`
 }
 
 func NewRelease() *Release {
@@ -3594,10 +3595,11 @@ func (p *Release) String() string {
 }
 
 type CreateReleaseReq struct {
-	ProjectId string  `thrift:"projectId,1" form:"projectId" json:"projectId"`
-	Name      string  `thrift:"name,2" form:"name" json:"name"`
-	Version   *string `thrift:"version,3,optional" form:"version" json:"version,omitempty"`
-	Summary   *string `thrift:"summary,4,optional" form:"summary" json:"summary,omitempty"`
+	ProjectId    string  `thrift:"projectId,1" form:"projectId" json:"projectId"`
+	Name         string  `thrift:"name,2" form:"name" json:"name"`
+	Version      *string `thrift:"version,3,optional" form:"version" json:"version,omitempty"`
+	Summary      *string `thrift:"summary,4,optional" form:"summary" json:"summary,omitempty"`
+	ParentBranch *string `thrift:"parentBranch,5,optional" form:"parentBranch" json:"parentBranch,omitempty"`
 }
 
 func NewCreateReleaseReq() *CreateReleaseReq {
@@ -3638,6 +3640,7 @@ var fieldIDToName_CreateReleaseReq = map[int16]string{
 	2: "name",
 	3: "version",
 	4: "summary",
+	5: "parentBranch",
 }
 
 func (p *CreateReleaseReq) IsSetVersion() bool {
@@ -3646,6 +3649,19 @@ func (p *CreateReleaseReq) IsSetVersion() bool {
 
 func (p *CreateReleaseReq) IsSetSummary() bool {
 	return p.Summary != nil
+}
+
+var CreateReleaseReq_ParentBranch_DEFAULT string
+
+func (p *CreateReleaseReq) GetParentBranch() (v string) {
+	if !p.IsSetParentBranch() {
+		return CreateReleaseReq_ParentBranch_DEFAULT
+	}
+	return *p.ParentBranch
+}
+
+func (p *CreateReleaseReq) IsSetParentBranch() bool {
+	return p.ParentBranch != nil
 }
 
 func (p *CreateReleaseReq) Read(iprot thrift.TProtocol) (err error) {
@@ -3894,11 +3910,12 @@ func (p *CreateReleaseReq) String() string {
 }
 
 type UpdateReleaseReq struct {
-	ID      string  `thrift:"id,1" form:"id" json:"id"`
-	Name    *string `thrift:"name,2,optional" form:"name" json:"name,omitempty"`
-	Version *string `thrift:"version,3,optional" form:"version" json:"version,omitempty"`
-	Summary *string `thrift:"summary,4,optional" form:"summary" json:"summary,omitempty"`
-	Status  *string `thrift:"status,5,optional" form:"status" json:"status,omitempty"`
+	ID           string  `thrift:"id,1" form:"id" json:"id"`
+	Name         *string `thrift:"name,2,optional" form:"name" json:"name,omitempty"`
+	Version      *string `thrift:"version,3,optional" form:"version" json:"version,omitempty"`
+	Summary      *string `thrift:"summary,4,optional" form:"summary" json:"summary,omitempty"`
+	Status       *string `thrift:"status,5,optional" form:"status" json:"status,omitempty"`
+	ParentBranch *string `thrift:"parentBranch,6,optional" form:"parentBranch" json:"parentBranch,omitempty"`
 }
 
 func NewUpdateReleaseReq() *UpdateReleaseReq {
@@ -3948,12 +3965,22 @@ func (p *UpdateReleaseReq) GetStatus() (v string) {
 	return *p.Status
 }
 
+var UpdateReleaseReq_ParentBranch_DEFAULT string
+
+func (p *UpdateReleaseReq) GetParentBranch() (v string) {
+	if !p.IsSetParentBranch() {
+		return UpdateReleaseReq_ParentBranch_DEFAULT
+	}
+	return *p.ParentBranch
+}
+
 var fieldIDToName_UpdateReleaseReq = map[int16]string{
 	1: "id",
 	2: "name",
 	3: "version",
 	4: "summary",
 	5: "status",
+	6: "parentBranch",
 }
 
 func (p *UpdateReleaseReq) IsSetName() bool {
@@ -3970,6 +3997,10 @@ func (p *UpdateReleaseReq) IsSetSummary() bool {
 
 func (p *UpdateReleaseReq) IsSetStatus() bool {
 	return p.Status != nil
+}
+
+func (p *UpdateReleaseReq) IsSetParentBranch() bool {
+	return p.ParentBranch != nil
 }
 
 func (p *UpdateReleaseReq) Read(iprot thrift.TProtocol) (err error) {

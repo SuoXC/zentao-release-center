@@ -16,6 +16,9 @@
           {{ refreshing ? '刷新中...' : '刷新数据' }}
         </button>
         <button class="btn btn-primary" @click="publish">发布</button>
+        <button class="btn btn-warning" @click="archiveRelease" v-if="release.status === 'published'">发布完成</button>
+        <button class="btn" @click="sendLanxin">发送蓝信</button>
+        <button class="btn" @click="sendEmail">发送邮件</button>
         <button class="btn" @click="exportRelease('markdown')">导出 MD</button>
         <button class="btn" @click="exportRelease('html')">导出 HTML</button>
       </div>
@@ -24,6 +27,7 @@
     <div v-if="release" class="card mb-16" style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">
       <template v-if="!editingRelease">
         <div><span style="color:var(--text-tertiary)">版本：</span>{{ release.version || '-' }}</div>
+        <div><span style="color:var(--text-tertiary)">基准分支：</span><span style="font-weight:500;color:var(--primary)">{{ release.parentBranch || '未设置' }}</span></div>
         <div><span style="color:var(--text-tertiary)">条目：</span>{{ release.itemCount }}</div>
         <div><span style="color:var(--text-tertiary)">Bug：</span>{{ release.bugCount }}</div>
         <div><span style="color:var(--text-tertiary)">Task：</span>{{ release.taskCount }}</div>
@@ -41,6 +45,10 @@
         <div class="form-group" style="flex:0.5;margin-bottom:0">
           <label>版本</label>
           <input v-model="editForm.version" />
+        </div>
+        <div class="form-group" style="flex:1;margin-bottom:0">
+          <label>基准分支</label>
+          <input v-model="editForm.parentBranch" placeholder="例如：main、develop" />
         </div>
         <div class="form-group" style="flex:2;margin-bottom:0">
           <label>概述</label>
@@ -102,6 +110,59 @@
           </div>
           <button class="btn btn-primary btn-sm" @click="submitDeployment">添加</button>
           <button class="btn btn-sm" @click="showDeploymentForm = false">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 功能说明 -->
+    <div class="card mb-16">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h3 style="font-size:15px">功能说明</h3>
+        <button class="btn btn-sm" @click="showFeatureForm = true; featureForm = { title: '', content: '' }">添加功能说明</button>
+      </div>
+
+      <div v-if="features.length">
+        <div v-for="(f, idx) in features" :key="f.id" style="padding:16px;border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
+          <template v-if="editingFeatureId !== f.id">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <h4 style="font-size:14px;margin:0">{{ idx + 1 }}. {{ f.title }}</h4>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-sm" @click="startEditFeature(f)">编辑</button>
+                <button class="btn btn-sm btn-danger" @click="removeFeature(f.id)">删除</button>
+              </div>
+            </div>
+            <div v-if="f.content" style="color:var(--text-secondary);line-height:1.8" v-html="f.content"></div>
+          </template>
+          <template v-else>
+            <div class="form-group" style="margin-bottom:8px">
+              <label>标题</label>
+              <input v-model="editFeatureForm.title" />
+            </div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label>内容（支持 HTML）</label>
+              <textarea v-model="editFeatureForm.content" rows="6" style="min-height:120px" />
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary btn-sm" @click="saveEditFeature">保存</button>
+              <button class="btn btn-sm" @click="editingFeatureId = ''">取消</button>
+            </div>
+          </template>
+        </div>
+      </div>
+      <div v-else style="color:var(--text-tertiary);padding:12px 0">暂无功能说明，点击「添加功能说明」</div>
+
+      <div v-if="showFeatureForm" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+        <div class="form-group">
+          <label>标题 *</label>
+          <input v-model="featureForm.title" placeholder="功能名称" />
+        </div>
+        <div class="form-group">
+          <label>内容（支持 HTML 富文本）</label>
+          <textarea v-model="featureForm.content" rows="8" placeholder="描述此功能的详细说明，支持 HTML 格式" style="min-height:160px" />
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" @click="submitFeature">添加</button>
+          <button class="btn" @click="showFeatureForm = false">取消</button>
         </div>
       </div>
     </div>
@@ -259,6 +320,257 @@
       </div>
     </div>
 
+    <!-- 分支管理 -->
+    <div class="card mb-16">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="font-size:15px">分支管理</h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm" @click="showCreateReleaseBranch = true">创建发布分支</button>
+          <button class="btn btn-sm" @click="showCreateFeatureBranch = true">创建功能分支</button>
+        </div>
+      </div>
+
+      <div v-if="showCreateReleaseBranch" class="card mb-16" style="background:#f8f9fa">
+        <h4 style="margin-bottom:12px">创建发布分支</h4>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
+            <label style="font-size:12px">选择仓库 *</label>
+            <select v-model="releaseBranchForm.repoId" @change="onReleaseRepoChange" style="width:100%">
+              <option value="">请选择仓库</option>
+              <option v-for="r in projectRepos" :key="r.id" :value="r.id">{{ r.repoName }}</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
+            <label style="font-size:12px">基于分支（父分支） *</label>
+            <select v-model="releaseBranchForm.parentBranch" style="width:100%">
+              <option value="">请选择父分支</option>
+              <option v-for="b in releaseRepoBranches" :key="b.name" :value="b.name">
+                {{ b.name }}{{ b.isDefault ? ' (默认)' : '' }}{{ b.isProtected ? ' 🔒' : '' }}
+              </option>
+            </select>
+            <div v-if="loadingReleaseBranches" style="font-size:12px;color:var(--text-tertiary);margin-top:4px">
+              <span class="loading-spinner"></span> 加载分支中...
+            </div>
+          </div>
+          <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
+            <label style="font-size:12px">新分支名称（可选）</label>
+            <input v-model="releaseBranchForm.branchName" :placeholder="`release/${release?.version || 'v1.0.0'}`" />
+          </div>
+          <button class="btn btn-primary btn-sm" @click="createReleaseBranch" :disabled="!releaseBranchForm.parentBranch">创建</button>
+          <button class="btn btn-sm" @click="showCreateReleaseBranch = false">取消</button>
+        </div>
+      </div>
+
+      <div v-if="showCreateFeatureBranch" class="card mb-16" style="background:#f8f9fa">
+        <h4 style="margin-bottom:12px">创建功能分支</h4>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
+            <label style="font-size:12px">选择仓库 *</label>
+            <select v-model="featureBranchForm.repoId" @change="onFeatureRepoChange" style="width:100%">
+              <option value="">请选择仓库</option>
+              <option v-for="r in projectRepos" :key="r.id" :value="r.id">{{ r.repoName }}</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
+            <label style="font-size:12px">基于分支（父分支） *</label>
+            <select v-model="featureBranchForm.parentBranch" style="width:100%">
+              <option value="">请选择父分支</option>
+              <option v-for="b in featureRepoBranches" :key="b.name" :value="b.name">
+                {{ b.name }}{{ b.isDefault ? ' (默认)' : '' }}{{ b.isProtected ? ' 🔒' : '' }}
+              </option>
+            </select>
+            <div v-if="loadingFeatureBranches" style="font-size:12px;color:var(--text-tertiary);margin-top:4px">
+              <span class="loading-spinner"></span> 加载分支中...
+            </div>
+          </div>
+          <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
+            <label style="font-size:12px">新分支名称 *</label>
+            <input v-model="featureBranchForm.branchName" placeholder="feature/xxx" />
+          </div>
+          <button class="btn btn-primary btn-sm" @click="createFeatureBranch" :disabled="!featureBranchForm.parentBranch || !featureBranchForm.branchName">创建</button>
+          <button class="btn btn-sm" @click="showCreateFeatureBranch = false">取消</button>
+        </div>
+      </div>
+
+      <table class="data-table" v-if="branches.length">
+        <thead>
+          <tr>
+            <th>分支名称</th>
+            <th>类型</th>
+            <th>父分支</th>
+            <th>描述</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="b in branches" :key="b.id">
+            <td><a v-if="b.gitlabBranchUrl" :href="b.gitlabBranchUrl" target="_blank" style="color:var(--primary)">{{ b.branchName }}</a><span v-else>{{ b.branchName }}</span></td>
+            <td><span :class="['badge', b.branchType === 'release' ? 'badge-info' : 'badge-success']">{{ b.branchType === 'release' ? '发布分支' : '功能分支' }}</span></td>
+            <td>{{ b.parentBranch || '-' }}</td>
+            <td style="max-width:300px">
+              <template v-if="editingBranchId !== b.id">
+                <span style="color:var(--text-tertiary)">{{ b.description || '点击编辑添加描述' }}</span>
+                <button class="btn btn-sm" style="margin-left:8px" @click="startEditBranch(b)">编辑</button>
+              </template>
+              <template v-else>
+                <div style="display:flex;gap:4px">
+                  <input v-model="editBranchDesc" placeholder="记录这个分支的用途、需求等" style="flex:1" />
+                  <button class="btn btn-primary btn-sm" @click="saveBranchDesc(b.id)">保存</button>
+                  <button class="btn btn-sm" @click="editingBranchId = ''">取消</button>
+                </div>
+              </template>
+            </td>
+            <td><button class="btn btn-sm btn-danger" @click="deleteBranch(b.id)">删除</button></td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-else style="color:var(--text-tertiary);padding:12px 0">暂无关联分支</div>
+    </div>
+
+    <!-- Docker 镜像 -->
+    <div class="card mb-16">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="font-size:15px">Docker 镜像</h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm" @click="showAddImage = true">手动添加镜像</button>
+          <button class="btn btn-sm" @click="showWebhookGuide = !showWebhookGuide">Webhook 配置指南</button>
+        </div>
+      </div>
+
+      <div v-if="showWebhookGuide" class="card mb-16" style="background:#f0f7ff;border:1px solid #b3d4fc">
+        <h4 style="margin-bottom:12px;color:#1a73e8">GitLab CI 自动关联 Docker 镜像</h4>
+        <div style="font-size:13px;line-height:1.8">
+          <p><strong>方式一：Pipeline Webhook（自动记录构建事件）</strong></p>
+          <ol style="margin:8px 0 16px 20px">
+            <li>进入 GitLab 项目 → Settings → Webhooks</li>
+            <li>URL: <code style="background:#e8f0fe;padding:2px 6px;border-radius:3px">{{ webhookUrl }}</code></li>
+            <li>Secret Token: 留空或填写配置的 webhook_secret</li>
+            <li>Trigger: 勾选 <strong>Pipeline events</strong></li>
+          </ol>
+          <p><strong>方式二：CI 脚本调用（推荐，精确上报镜像信息）</strong></p>
+          <p>在 <code>.gitlab-ci.yml</code> 中添加 <code>report_images</code> 阶段：</p>
+          <pre style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:6px;margin:8px 0;overflow-x:auto"><code># 在 variables 中添加：
+variables:
+  RELEASE_CENTER_URL: "{{ host }}"
+  RELEASE_ID: "{{ release?.id || '发布单ID' }}"
+
+# 在 stages 中添加 report 阶段
+stages:
+  - build
+  - report    # 新增
+  - deploy
+
+# 新增 report_images job
+report_images:
+  stage: report
+  script: |
+    if [ -z "$RELEASE_ID" ]; then
+      echo "RELEASE_ID not set, skipping"
+      exit 0
+    fi
+    # 上报 server 镜像
+    if [ -n "$IMAGE_server" ]; then
+      IMAGE_NAME=$(echo "$IMAGE_server" | sed 's|.*//||' | cut -d: -f1)
+      IMAGE_TAG=$(echo "$IMAGE_server" | cut -d: -f2)
+      REGISTRY=$(echo "$IMAGE_server" | sed 's|.*//||' | cut -d/ -f1)
+      curl -s -X POST "${RELEASE_CENTER_URL}/api/ci/build" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"releaseId\": \"${RELEASE_ID}\",
+          \"imageName\": \"${IMAGE_NAME}\",
+          \"imageTag\": \"${IMAGE_TAG}\",
+          \"registry\": \"${REGISTRY}\",
+          \"branch\": \"${CI_COMMIT_BRANCH}\",
+          \"commitSha\": \"${CI_COMMIT_SHA}\",
+          \"commitMessage\": \"$(echo $CI_COMMIT_MESSAGE | head -1)\",
+          \"ciPipelineId\": ${CI_PIPELINE_ID},
+          \"ciPipelineUrl\": \"${CI_PIPELINE_URL}\"
+        }"
+    fi
+    # 上报 querier 镜像（同理）</code></pre>
+          <p style="margin-top:8px;color:#666">完整的 CI 配置示例请参考项目中的 <code>.gitlab-ci.yml.example</code></p>
+        </div>
+        <button class="btn btn-sm" @click="showWebhookGuide = false">关闭</button>
+      </div>
+
+      <div v-if="showAddImage" class="card mb-16" style="background:#f8f9fa">
+        <h4 style="margin-bottom:12px">添加 Docker 镜像</h4>
+        <div style="margin-bottom:12px">
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <button :class="['btn btn-sm', addImageMode === 'pool' ? 'btn-primary' : '']" @click="addImageMode = 'pool'; loadPoolImages()">从构建记录选择</button>
+            <button :class="['btn btn-sm', addImageMode === 'manual' ? 'btn-primary' : '']" @click="addImageMode = 'manual'">手动输入</button>
+          </div>
+        </div>
+
+        <div v-if="addImageMode === 'pool'" style="margin-bottom:12px">
+          <div v-if="poolImages.length" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
+            <div v-for="img in poolImages" :key="img.id" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);cursor:hover" @click="selectPoolImage(img)" :style="{background: selectedPoolImage?.id === img.id ? '#e8f0fe' : ''}">
+              <div>
+                <div style="font-weight:500">{{ img.imageName }}:{{ img.imageTag }}</div>
+                <div style="font-size:12px;color:var(--text-tertiary)">
+                  {{ img.registry }} | {{ img.branch }} | {{ img.commitSha?.substring(0, 8) || '-' }} | {{ img.commitMessage?.substring(0, 30) || '' }}
+                </div>
+              </div>
+              <span v-if="selectedPoolImage?.id === img.id" style="color:var(--primary)">✓</span>
+            </div>
+          </div>
+          <div v-else style="color:var(--text-tertiary);padding:12px;text-align:center">
+            暂无构建记录，可通过 CI 上报或 Webhook 自动记录
+          </div>
+          <div v-if="selectedPoolImage" style="margin-top:8px">
+            <button class="btn btn-primary btn-sm" @click="addFromPool">添加选中的镜像</button>
+          </div>
+        </div>
+
+        <div v-if="addImageMode === 'manual'" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
+            <label style="font-size:12px">镜像名称 *</label>
+            <input v-model="imageForm.imageName" placeholder="my-app" />
+          </div>
+          <div class="form-group" style="flex:0.5;min-width:100px;margin-bottom:0">
+            <label style="font-size:12px">Tag *</label>
+            <input v-model="imageForm.imageTag" placeholder="latest" />
+          </div>
+          <div class="form-group" style="flex:1;min-width:150px;margin-bottom:0">
+            <label style="font-size:12px">Registry</label>
+            <input v-model="imageForm.registry" placeholder="registry.example.com" />
+          </div>
+          <div class="form-group" style="flex:1;min-width:100px;margin-bottom:0">
+            <label style="font-size:12px">分支</label>
+            <input v-model="imageForm.branch" placeholder="main" />
+          </div>
+          <button class="btn btn-primary btn-sm" @click="addDockerImage">添加</button>
+        </div>
+        <button class="btn btn-sm" style="margin-top:8px" @click="showAddImage = false">关闭</button>
+      </div>
+
+      <table class="data-table" v-if="dockerImages.length">
+        <thead>
+          <tr>
+            <th>镜像</th>
+            <th>Tag</th>
+            <th>分支</th>
+            <th>Commit</th>
+            <th>来源</th>
+            <th>创建时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="img in dockerImages" :key="img.id">
+            <td>{{ img.imageName }}</td>
+            <td>{{ img.imageTag }}</td>
+            <td>{{ img.branch || '-' }}</td>
+            <td>{{ img.commitSha ? img.commitSha.substring(0, 8) : '-' }}</td>
+            <td><span :class="['badge', img.source === 'manual' ? 'badge-info' : 'badge-success']">{{ img.source === 'manual' ? '手动' : img.source === 'ci' ? 'CI构建' : 'Webhook' }}</span></td>
+            <td>{{ formatTime(img.createdAt) }}</td>
+            <td><button class="btn btn-sm btn-danger" @click="deleteDockerImage(img.id)">删除</button></td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-else style="color:var(--text-tertiary);padding:12px 0">暂无镜像，可通过 GitLab CI 自动关联或手动添加</div>
+    </div>
+
     <!-- 发布历史 -->
     <div class="card" v-if="snapshots.length">
       <h3 style="font-size:15px;margin-bottom:12px">发布历史</h3>
@@ -299,14 +611,54 @@
         <div v-if="snapshotHtml" v-html="snapshotHtml" class="markdown-body"></div>
       </div>
     </div>
+
+    <!-- 通知预览模态框 -->
+    <div v-if="showNotifyModal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000" @click.self="showNotifyModal=false">
+      <div class="card" style="width:700px;max-height:85vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h3>{{ notifyChannel === 'lanxin' ? '蓝信消息预览' : '邮件内容预览' }}</h3>
+          <button class="btn btn-sm" @click="showNotifyModal=false">关闭</button>
+        </div>
+        <div v-if="notifyChannel === 'lanxin'">
+          <div v-if="notifyPreview?.lanxinEnabled">
+            <div style="background:#f0f5ff;border:1px solid #b3d4fc;border-radius:8px;padding:16px;margin-bottom:16px;white-space:pre-wrap;font-size:13px;line-height:1.8">{{ notifyPreview?.lanxinMessage }}</div>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+              <button class="btn" @click="showNotifyModal=false">取消</button>
+              <button class="btn btn-primary" @click="confirmSendNotify">确认发送</button>
+            </div>
+          </div>
+          <div v-else style="color:var(--danger);padding:20px;text-align:center">
+            蓝信通知未启用，请在 config.yaml 中配置 lanxin.enabled=true 和 lanxin.url
+          </div>
+        </div>
+        <div v-if="notifyChannel === 'email'">
+          <div v-if="notifyPreview?.emailEnabled">
+            <div style="margin-bottom:8px;color:var(--text-secondary);font-size:13px">
+              收件人：<strong>{{ notifyPreview?.emailTo?.join(', ') || '未配置' }}</strong> &nbsp;|&nbsp;
+              主题：<strong>{{ notifyPreview?.emailSubject }}</strong>
+            </div>
+            <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:16px;max-height:400px;overflow-y:auto">
+              <div v-if="notifyPreview?.emailHtml" v-html="notifyPreview.emailHtml"></div>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+              <button class="btn" @click="showNotifyModal=false">取消</button>
+              <button class="btn btn-primary" @click="confirmSendNotify">确认发送</button>
+            </div>
+          </div>
+          <div v-else style="color:var(--danger);padding:20px;text-align:center">
+            邮件通知未启用，请在 config.yaml 中配置 email.enabled=true 和 SMTP 相关参数
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { releaseApi, itemApi, snapshotApi, zentaoApi, projectApi, deploymentApi, healthApi } from '../api'
-import type { Release, ReleaseItem, ReleaseSnapshot, Deployment } from '../api'
+import { releaseApi, itemApi, snapshotApi, zentaoApi, projectApi, deploymentApi, healthApi, repoApi, branchApi, dockerImageApi, gitlabApi, featureApi, notifyApi } from '../api'
+import type { Release, ReleaseItem, ReleaseSnapshot, Deployment, ProjectRepo, ReleaseBranch, DockerImage, ReleaseFeature } from '../api'
 
 const route = useRoute()
 const release = ref<Release | null>(null)
@@ -338,9 +690,43 @@ const refreshing = ref(false)
 const activeTab = ref<'all' | 'bug' | 'task' | 'note'>('all')
 
 const editingRelease = ref(false)
-const editForm = ref({ name: '', version: '', summary: '' })
+const editForm = ref({ name: '', version: '', summary: '', parentBranch: '' })
 const editingDeploymentId = ref('')
 const editDeployForm = ref({ moduleName: '', address: '', description: '' })
+
+const projectRepos = ref<ProjectRepo[]>([])
+const branches = ref<ReleaseBranch[]>([])
+const dockerImages = ref<DockerImage[]>([])
+const showCreateReleaseBranch = ref(false)
+const showCreateFeatureBranch = ref(false)
+const showAddImage = ref(false)
+const addImageMode = ref<'pool' | 'manual'>('pool')
+const poolImages = ref<any[]>([])
+const selectedPoolImage = ref<any>(null)
+const releaseBranchForm = ref({ repoId: '', branchName: '', parentBranch: '' })
+const featureBranchForm = ref({ repoId: '', branchName: '', parentBranch: '' })
+const imageForm = ref({ imageName: '', imageTag: '', registry: '', branch: '' })
+
+const releaseRepoBranches = ref<any[]>([])
+const featureRepoBranches = ref<any[]>([])
+const loadingReleaseBranches = ref(false)
+const loadingFeatureBranches = ref(false)
+const editingBranchId = ref('')
+const editBranchDesc = ref('')
+const showWebhookGuide = ref(false)
+const webhookUrl = ref(`${window.location.origin}/api/webhook/gitlab`)
+const host = ref(window.location.origin)
+
+const features = ref<ReleaseFeature[]>([])
+const showFeatureForm = ref(false)
+const featureForm = ref({ title: '', content: '' })
+const editingFeatureId = ref('')
+const editFeatureForm = ref({ title: '', content: '' })
+
+const showNotifyModal = ref(false)
+const notifyChannel = ref<'lanxin' | 'email'>('lanxin')
+const notifyPreview = ref<any>(null)
+const notifySending = ref(false)
 
 function formatTime(t: string) {
   if (!t) return '-'
@@ -411,8 +797,15 @@ async function load() {
   try {
     const rResp: any = await releaseApi.get(id)
     release.value = rResp?.data || null
-    await Promise.all([loadItems(), loadSnapshots(), loadDeployments()])
-  } catch {} finally {
+    await Promise.all([loadItems(), loadSnapshots(), loadDeployments(), loadBranches(), loadDockerImages(), loadFeatures()])
+    if (release.value?.projectId) {
+      const reposResp: any = await repoApi.list(release.value.projectId)
+      projectRepos.value = reposResp?.list || []
+      console.log('Loaded projectRepos:', projectRepos.value)
+    }
+  } catch (e) {
+    console.error('Load failed:', e)
+  } finally {
     loading.value = false
   }
 }
@@ -441,6 +834,302 @@ async function loadDeployments() {
   try {
     const dResp: any = await deploymentApi.list(id)
     deployments.value = dResp?.list || []
+  } catch {}
+}
+
+async function loadBranches() {
+  const id = route.query.id as string
+  try {
+    const resp: any = await branchApi.list(id)
+    branches.value = resp?.list || []
+  } catch {}
+}
+
+async function loadDockerImages() {
+  const id = route.query.id as string
+  try {
+    const resp: any = await dockerImageApi.list(id)
+    dockerImages.value = resp?.list || []
+  } catch {}
+}
+
+async function loadFeatures() {
+  const id = route.query.id as string
+  try {
+    const resp: any = await featureApi.list(id)
+    features.value = resp?.list || []
+  } catch {}
+}
+
+async function submitFeature() {
+  if (!featureForm.value.title) return alert('请输入标题')
+  try {
+    await featureApi.add({
+      releaseId: route.query.id as string,
+      title: featureForm.value.title,
+      content: featureForm.value.content,
+    })
+    featureForm.value = { title: '', content: '' }
+    showFeatureForm.value = false
+    await loadFeatures()
+  } catch {}
+}
+
+function startEditFeature(f: ReleaseFeature) {
+  editingFeatureId.value = f.id
+  editFeatureForm.value = { title: f.title, content: f.content }
+}
+
+async function saveEditFeature() {
+  try {
+    await featureApi.update({ id: editingFeatureId.value, ...editFeatureForm.value })
+    editingFeatureId.value = ''
+    await loadFeatures()
+  } catch {}
+}
+
+async function removeFeature(id: string) {
+  if (!confirm('确定删除此功能说明？')) return
+  try {
+    await featureApi.delete(id)
+    await loadFeatures()
+  } catch {}
+}
+
+async function sendLanxin() {
+  notifyChannel.value = 'lanxin'
+  try {
+    const resp: any = await notifyApi.preview({
+      releaseId: route.query.id as string,
+      version: release.value?.version || undefined,
+    })
+    notifyPreview.value = resp?.data || null
+    showNotifyModal.value = true
+  } catch {}
+}
+
+async function sendEmail() {
+  notifyChannel.value = 'email'
+  try {
+    const resp: any = await notifyApi.preview({
+      releaseId: route.query.id as string,
+      version: release.value?.version || undefined,
+    })
+    notifyPreview.value = resp?.data || null
+    showNotifyModal.value = true
+  } catch {}
+}
+
+async function confirmSendNotify() {
+  notifySending.value = true
+  try {
+    const resp: any = await notifyApi.send({
+      releaseId: route.query.id as string,
+      version: release.value?.version || undefined,
+      channel: notifyChannel.value,
+    })
+    const result = resp?.data
+    if (notifyChannel.value === 'lanxin') {
+      if (result?.lanxinSuccess) {
+        alert('蓝信发送成功！')
+      } else {
+        alert('蓝信发送失败：' + (result?.lanxinError || '未知错误'))
+      }
+    } else {
+      if (result?.emailSuccess) {
+        alert('邮件发送成功！')
+      } else {
+        alert('邮件发送失败：' + (result?.emailError || '未知错误'))
+      }
+    }
+    showNotifyModal.value = false
+  } catch (e: any) {
+    alert('发送失败：' + (e?.message || '未知错误'))
+  } finally {
+    notifySending.value = false
+  }
+}
+
+async function onReleaseRepoChange() {
+  releaseBranchForm.value.parentBranch = ''
+  releaseBranchForm.value.branchName = ''
+  if (!releaseBranchForm.value.repoId) {
+    releaseRepoBranches.value = []
+    return
+  }
+  const repo = projectRepos.value.find(r => r.id === releaseBranchForm.value.repoId)
+  if (!repo) return
+  loadingReleaseBranches.value = true
+  try {
+    const resp: any = await gitlabApi.branches(repo.gitlabProjectId)
+    releaseRepoBranches.value = resp?.list || []
+    // 优先使用发布单的基准分支
+    if (release.value?.parentBranch && releaseRepoBranches.value.find(b => b.name === release.value!.parentBranch)) {
+      releaseBranchForm.value.parentBranch = release.value.parentBranch
+    } else {
+      const defaultBranch = releaseRepoBranches.value.find(b => b.isDefault)
+      if (defaultBranch) {
+        releaseBranchForm.value.parentBranch = defaultBranch.name
+      }
+    }
+  } catch {} finally {
+    loadingReleaseBranches.value = false
+  }
+}
+
+async function onFeatureRepoChange() {
+  featureBranchForm.value.parentBranch = ''
+  featureBranchForm.value.branchName = ''
+  if (!featureBranchForm.value.repoId) {
+    featureRepoBranches.value = []
+    return
+  }
+  const repo = projectRepos.value.find(r => r.id === featureBranchForm.value.repoId)
+  if (!repo) {
+    console.error('Repo not found:', featureBranchForm.value.repoId)
+    return
+  }
+  loadingFeatureBranches.value = true
+  try {
+    console.log('Loading branches for repo:', repo.gitlabProjectId)
+    const resp: any = await gitlabApi.branches(repo.gitlabProjectId)
+    console.log('Branches response:', resp)
+    featureRepoBranches.value = resp?.list || []
+    console.log('featureRepoBranches:', featureRepoBranches.value)
+    // 优先选择已关联的发布分支作为父分支
+    const releaseBranch = branches.value.find(b => b.repoId === featureBranchForm.value.repoId && b.branchType === 'release')
+    if (releaseBranch) {
+      featureBranchForm.value.parentBranch = releaseBranch.branchName
+    } else if (release.value?.parentBranch && featureRepoBranches.value.find(b => b.name === release.value!.parentBranch)) {
+      // 如果没有发布分支，使用发布单的基准分支
+      featureBranchForm.value.parentBranch = release.value.parentBranch
+    } else {
+      const defaultBranch = featureRepoBranches.value.find(b => b.isDefault)
+      if (defaultBranch) {
+        featureBranchForm.value.parentBranch = defaultBranch.name
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load branches:', e)
+  } finally {
+    loadingFeatureBranches.value = false
+  }
+}
+
+async function createReleaseBranch() {
+  if (!releaseBranchForm.value.repoId) return alert('请选择仓库')
+  if (!releaseBranchForm.value.parentBranch) return alert('请选择基于分支')
+  try {
+    await branchApi.createRelease({
+      releaseId: route.query.id as string,
+      repoId: releaseBranchForm.value.repoId,
+      branchName: releaseBranchForm.value.branchName || undefined,
+      parentBranch: releaseBranchForm.value.parentBranch,
+    })
+    releaseBranchForm.value = { repoId: '', branchName: '', parentBranch: '' }
+    releaseRepoBranches.value = []
+    showCreateReleaseBranch.value = false
+    await loadBranches()
+  } catch {}
+}
+
+async function createFeatureBranch() {
+  if (!featureBranchForm.value.repoId) return alert('请选择仓库')
+  if (!featureBranchForm.value.parentBranch) return alert('请选择基于分支')
+  if (!featureBranchForm.value.branchName) return alert('请输入分支名称')
+  try {
+    await branchApi.createFeature({
+      releaseId: route.query.id as string,
+      repoId: featureBranchForm.value.repoId,
+      branchName: featureBranchForm.value.branchName,
+      parentBranch: featureBranchForm.value.parentBranch,
+    })
+    featureBranchForm.value = { repoId: '', branchName: '', parentBranch: '' }
+    featureRepoBranches.value = []
+    showCreateFeatureBranch.value = false
+    await loadBranches()
+  } catch {}
+}
+
+async function deleteBranch(id: string) {
+  if (!confirm('确定删除此分支？')) return
+  try {
+    await branchApi.delete(id)
+    await loadBranches()
+  } catch {}
+}
+
+function startEditBranch(b: ReleaseBranch) {
+  editingBranchId.value = b.id
+  editBranchDesc.value = b.description || ''
+}
+
+async function saveBranchDesc(id: string) {
+  try {
+    await branchApi.update({ id, description: editBranchDesc.value })
+    editingBranchId.value = ''
+    await loadBranches()
+  } catch {}
+}
+
+async function loadPoolImages() {
+  try {
+    const resp: any = await dockerImageApi.pool()
+    poolImages.value = resp?.list || []
+  } catch {}
+}
+
+function selectPoolImage(img: any) {
+  selectedPoolImage.value = selectedPoolImage.value?.id === img.id ? null : img
+}
+
+async function addFromPool() {
+  if (!selectedPoolImage.value) return alert('请选择一个镜像')
+  try {
+    await dockerImageApi.add({
+      releaseId: route.query.id as string,
+      imageName: selectedPoolImage.value.imageName,
+      imageTag: selectedPoolImage.value.imageTag,
+      registry: selectedPoolImage.value.registry || undefined,
+      branch: selectedPoolImage.value.branch || undefined,
+      commitSha: selectedPoolImage.value.commitSha || undefined,
+      commitMessage: selectedPoolImage.value.commitMessage || undefined,
+    })
+    selectedPoolImage.value = null
+    showAddImage.value = false
+    await loadDockerImages()
+  } catch {}
+}
+
+async function archiveRelease() {
+  if (!confirm('确定将此发布单标记为「发布完成」？后续 CI 构建的镜像将不会自动添加到此发布单。')) return
+  try {
+    await releaseApi.update({ id: route.query.id as string, status: 'archived' })
+    await load()
+  } catch {}
+}
+
+async function addDockerImage() {
+  if (!imageForm.value.imageName || !imageForm.value.imageTag) return alert('请输入镜像名称和Tag')
+  try {
+    await dockerImageApi.add({
+      releaseId: route.query.id as string,
+      imageName: imageForm.value.imageName,
+      imageTag: imageForm.value.imageTag,
+      registry: imageForm.value.registry || undefined,
+      branch: imageForm.value.branch || undefined,
+    })
+    imageForm.value = { imageName: '', imageTag: '', registry: '', branch: '' }
+    showAddImage.value = false
+    await loadDockerImages()
+  } catch {}
+}
+
+async function deleteDockerImage(id: string) {
+  if (!confirm('确定删除此镜像？')) return
+  try {
+    await dockerImageApi.delete(id)
+    await loadDockerImages()
   } catch {}
 }
 
@@ -522,7 +1211,12 @@ async function saveEditDeployment() {
 function startEditRelease() {
   if (!release.value) return
   editingRelease.value = true
-  editForm.value = { name: release.value.name, version: release.value.version, summary: release.value.summary }
+  editForm.value = {
+    name: release.value.name,
+    version: release.value.version,
+    summary: release.value.summary,
+    parentBranch: release.value.parentBranch || ''
+  }
 }
 
 async function saveEditRelease() {

@@ -27,6 +27,7 @@ export interface Release {
   version: string
   status: string
   summary: string
+  parentBranch: string
   publishCount: number
   firstPublishedAt: string
   lastPublishedAt: string
@@ -77,6 +78,72 @@ export interface Deployment {
   moduleName: string
   address: string
   description: string
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProjectRepo {
+  id: string
+  projectId: string
+  gitlabProjectId: number
+  repoUrl: string
+  repoName: string
+  defaultBranch: string
+  createdAt: string
+}
+
+export interface ReleaseBranch {
+  id: string
+  releaseId: string
+  repoId: string
+  branchName: string
+  branchType: string
+  parentBranch: string
+  gitlabBranchUrl: string
+  description: string
+  createdAt: string
+}
+
+export interface DockerImage {
+  id: string
+  releaseId: string
+  repoId: string
+  imageName: string
+  imageTag: string
+  imageDigest: string
+  registry: string
+  ciPipelineId: number
+  ciPipelineUrl: string
+  branch: string
+  commitSha: string
+  commitMessage: string
+  source: string
+  createdAt: string
+}
+
+export interface GitlabProject {
+  id: number
+  name: string
+  nameWithNamespace: string
+  pathWithNamespace: string
+  webUrl: string
+  httpUrlToRepo: string
+  defaultBranch: string
+}
+
+export interface GitlabBranch {
+  name: string
+  isDefault: boolean
+  isProtected: boolean
+  webUrl: string
+}
+
+export interface ReleaseFeature {
+  id: string
+  releaseId: string
+  title: string
+  content: string
   sortOrder: number
   createdAt: string
   updatedAt: string
@@ -137,6 +204,49 @@ export const deploymentApi = {
   delete: (id: string) => api.post('/deployments/delete', { id }),
 }
 
+export const repoApi = {
+  list: (projectId: string) => api.get('/projects/repos', { params: { projectId } }),
+  add: (data: { projectId: string; gitlabProjectId: number; repoUrl: string; repoName: string; defaultBranch?: string }) =>
+    api.post('/projects/repos', data),
+  delete: (id: string) => api.post('/projects/repos/delete', { id }),
+}
+
+export const branchApi = {
+  list: (releaseId: string) => api.get('/release-branches', { params: { releaseId } }),
+  createRelease: (data: { releaseId: string; repoId: string; branchName?: string; parentBranch?: string }) =>
+    api.post('/release-branches', data),
+  createFeature: (data: { releaseId: string; repoId: string; branchName: string; parentBranch?: string }) =>
+    api.post('/release-branches/feature', data),
+  update: (data: { id: string; description?: string }) => api.post('/release-branches/update', data),
+  delete: (id: string) => api.post('/release-branches/delete', { id }),
+}
+
+export const dockerImageApi = {
+  list: (releaseId: string) => api.get('/docker-images', { params: { releaseId } }),
+  pool: (gitlabProjectId?: number) => api.get('/docker-images/pool', { params: { gitlabProjectId } }),
+  add: (data: { releaseId: string; repoId?: string; imageName: string; imageTag: string; imageDigest?: string; registry?: string; branch?: string; commitSha?: string; commitMessage?: string }) =>
+    api.post('/docker-images', data),
+  delete: (id: string) => api.post('/docker-images/delete', { id }),
+}
+
+export const gitlabApi = {
+  search: (query: string) => api.get('/gitlab/search', { params: { query } }),
+  branches: (gitlabProjectId: number) => api.get('/gitlab/branches', { params: { gitlabProjectId } }),
+}
+
 export const healthApi = {
   get: () => api.get('/health'),
+}
+
+export const featureApi = {
+  list: (releaseId: string) => api.get('/features', { params: { releaseId } }),
+  add: (data: { releaseId: string; title: string; content: string }) =>
+    api.post('/features', data),
+  update: (data: Partial<ReleaseFeature> & { id: string }) => api.post('/features/update', data),
+  delete: (id: string) => api.post('/features/delete', { id }),
+}
+
+export const notifyApi = {
+  preview: (data: { releaseId: string; version?: string }) => api.post('/notify/preview', data),
+  send: (data: { releaseId: string; version?: string; channel?: string }) => api.post('/notify/send', data),
 }

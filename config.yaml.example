@@ -11,3 +11,27 @@ database:
 
 log:
   level: info
+
+gitlab:
+  base_url: ""
+  token: ""
+  webhook_secret: ""
+
+# 蓝信通知配置
+lanxin:
+  enabled: false
+  url: "https://apigw.example.com/bot/hook/messages/xxx"
+  secret: "your-lanxin-secret"
+  skip_ssl: false
+
+# 邮件通知配置
+email:
+  enabled: false
+  smtp_host: "smtp.example.com"
+  smtp_port: 465
+  username: "noreply@example.com"
+  password: "your-smtp-password"
+  sender_name: "发布中心"
+  sender_address: "noreply@example.com"
+  use_ssl: true
+  recipients: "dev-team@example.com,qa-team@example.com"

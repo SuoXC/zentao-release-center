@@ -1,60 +1,54 @@
 package store
 
 import (
-	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
-	center "github.com/yi-nology/zentao-release-center/biz/model/release/center"
+	"github.com/yi-nology/zentao-release-center/internal/model"
+	"gorm.io/gorm"
 )
 
 type SnapshotStore struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-func NewSnapshotStore(s *Store) *SnapshotStore {
-	return &SnapshotStore{db: s.DB()}
+func NewSnapshotStore(db *gorm.DB) *SnapshotStore {
+	return &SnapshotStore{db: db}
 }
 
-func (ss *SnapshotStore) Create(releaseID, version, content string, itemCount, bugCount, taskCount, noteCount int) (*center.ReleaseSnapshot, error) {
-	id := uuid.New().String()
-	now := time.Now().Format(time.DateTime)
-	_, err := ss.db.Exec(`INSERT INTO release_snapshots (id, release_id, version, content, item_count, bug_count, task_count, note_count, published_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, releaseID, version, content, itemCount, bugCount, taskCount, noteCount, now)
-	if err != nil {
-		return nil, err
+func (ss *SnapshotStore) Create(releaseKeyword, version, content string, itemCount, bugCount, taskCount, noteCount int) (*model.ReleaseSnapshot, error) {
+	snap := &model.ReleaseSnapshot{
+		Keyword:        uuid.New().String(),
+		ReleaseKeyword: releaseKeyword,
+		Version:        version,
+		Content:        content,
+		ItemCount:      itemCount,
+		BugCount:       bugCount,
+		TaskCount:      taskCount,
+		NoteCount:      noteCount,
+		PublishedAt:    time.Now(),
 	}
-	return ss.GetByID(id)
-}
-
-func (ss *SnapshotStore) GetByID(id string) (*center.ReleaseSnapshot, error) {
-	snap := &center.ReleaseSnapshot{}
-	err := ss.db.QueryRow(`SELECT id, release_id, version, content, item_count, bug_count, task_count, note_count, published_at FROM release_snapshots WHERE id = ?`, id).
-		Scan(&snap.ID, &snap.ReleaseId, &snap.Version, &snap.Content, &snap.ItemCount, &snap.BugCount, &snap.TaskCount, &snap.NoteCount, &snap.PublishedAt)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
+	if err := ss.db.Create(snap).Error; err != nil {
 		return nil, err
 	}
 	return snap, nil
 }
 
-func (ss *SnapshotStore) ListByRelease(releaseID string) ([]*center.ReleaseSnapshot, error) {
-	rows, err := ss.db.Query(`SELECT id, release_id, version, content, item_count, bug_count, task_count, note_count, published_at FROM release_snapshots WHERE release_id = ? ORDER BY published_at DESC`, releaseID)
-	if err != nil {
+func (ss *SnapshotStore) GetByID(keyword string) (*model.ReleaseSnapshot, error) {
+	var snap model.ReleaseSnapshot
+	if err := ss.db.Where("keyword = ?", keyword).First(&snap).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
-	defer rows.Close()
+	return &snap, nil
+}
 
-	var list []*center.ReleaseSnapshot
-	for rows.Next() {
-		snap := &center.ReleaseSnapshot{}
-		if err := rows.Scan(&snap.ID, &snap.ReleaseId, &snap.Version, &snap.Content, &snap.ItemCount, &snap.BugCount, &snap.TaskCount, &snap.NoteCount, &snap.PublishedAt); err != nil {
-			return nil, err
-		}
-		list = append(list, snap)
+func (ss *SnapshotStore) ListByRelease(releaseKeyword string) ([]*model.ReleaseSnapshot, error) {
+	var snaps []*model.ReleaseSnapshot
+	if err := ss.db.Where("release_keyword = ?", releaseKeyword).Order("published_at DESC").Find(&snaps).Error; err != nil {
+		return nil, err
 	}
-	return list, nil
+	return snaps, nil
 }

@@ -76,15 +76,16 @@ struct Release {
     5: string version
     6: string status
     7: string summary
-    8: i32 publishCount
-    9: string firstPublishedAt
-    10: string lastPublishedAt
-    11: i32 itemCount
-    12: i32 bugCount
-    13: i32 taskCount
-    14: i32 noteCount
-    15: string createdAt
-    16: string updatedAt
+    8: string parentBranch
+    9: i32 publishCount
+    10: string firstPublishedAt
+    11: string lastPublishedAt
+    12: i32 itemCount
+    13: i32 bugCount
+    14: i32 taskCount
+    15: i32 noteCount
+    16: string createdAt
+    17: string updatedAt
 }
 
 struct CreateReleaseReq {
@@ -92,6 +93,7 @@ struct CreateReleaseReq {
     2: string name (api.body="name")
     3: optional string version (api.body="version")
     4: optional string summary (api.body="summary")
+    5: optional string parentBranch (api.body="parentBranch")
 }
 
 struct UpdateReleaseReq {
@@ -349,6 +351,174 @@ struct DeploymentResp {
     2: optional Deployment data
 }
 
+// ==================== GitLab 仓库关联 ====================
+
+struct ProjectRepo {
+    1: string id
+    2: string projectId
+    3: i32 gitlabProjectId
+    4: string repoUrl
+    5: string repoName
+    6: string defaultBranch
+    7: string createdAt
+}
+
+struct AddRepoReq {
+    1: string projectId (api.body="projectId")
+    2: i32 gitlabProjectId (api.body="gitlabProjectId")
+    3: string repoUrl (api.body="repoUrl")
+    4: string repoName (api.body="repoName")
+    5: optional string defaultBranch (api.body="defaultBranch")
+}
+
+struct DeleteRepoReq {
+    1: string id (api.body="id")
+}
+
+struct ListReposReq {
+    1: string projectId (api.query="projectId")
+}
+
+struct RepoResp {
+    1: BaseResp base
+    2: optional ProjectRepo data
+}
+
+struct RepoListResp {
+    1: BaseResp base
+    2: list<ProjectRepo> list
+}
+
+// ==================== GitLab 分支管理 ====================
+
+struct ReleaseBranch {
+    1: string id
+    2: string releaseId
+    3: string repoId
+    4: string branchName
+    5: string branchType
+    6: string parentBranch
+    7: string gitlabBranchUrl
+    8: string createdAt
+}
+
+struct CreateReleaseBranchReq {
+    1: string releaseId (api.body="releaseId")
+    2: string repoId (api.body="repoId")
+    3: optional string branchName (api.body="branchName")
+}
+
+struct CreateFeatureBranchReq {
+    1: string releaseId (api.body="releaseId")
+    2: string repoId (api.body="repoId")
+    3: string branchName (api.body="branchName")
+    4: optional string parentBranch (api.body="parentBranch")
+}
+
+struct ListBranchesReq {
+    1: string releaseId (api.query="releaseId")
+}
+
+struct DeleteBranchReq {
+    1: string id (api.body="id")
+}
+
+struct BranchResp {
+    1: BaseResp base
+    2: optional ReleaseBranch data
+}
+
+struct BranchListResp {
+    1: BaseResp base
+    2: list<ReleaseBranch> list
+}
+
+// ==================== Docker 镜像 ====================
+
+struct DockerImage {
+    1: string id
+    2: string releaseId
+    3: string repoId
+    4: string imageName
+    5: string imageTag
+    6: string imageDigest
+    7: string registry
+    8: i32 ciPipelineId
+    9: string ciPipelineUrl
+    10: string branch
+    11: string commitSha
+    12: string commitMessage
+    13: string source
+    14: string createdAt
+}
+
+struct AddDockerImageReq {
+    1: string releaseId (api.body="releaseId")
+    2: optional string repoId (api.body="repoId")
+    3: string imageName (api.body="imageName")
+    4: string imageTag (api.body="imageTag")
+    5: optional string imageDigest (api.body="imageDigest")
+    6: optional string registry (api.body="registry")
+    7: optional string branch (api.body="branch")
+    8: optional string commitSha (api.body="commitSha")
+    9: optional string commitMessage (api.body="commitMessage")
+}
+
+struct DeleteDockerImageReq {
+    1: string id (api.body="id")
+}
+
+struct ListDockerImagesReq {
+    1: string releaseId (api.query="releaseId")
+}
+
+struct DockerImageResp {
+    1: BaseResp base
+    2: optional DockerImage data
+}
+
+struct DockerImageListResp {
+    1: BaseResp base
+    2: list<DockerImage> list
+}
+
+// ==================== GitLab 搜索 ====================
+
+struct GitlabProject {
+    1: i32 id
+    2: string name
+    3: string nameWithNamespace
+    4: string pathWithNamespace
+    5: string webUrl
+    6: string httpUrlToRepo
+    7: string defaultBranch
+}
+
+struct GitlabBranch {
+    1: string name
+    2: bool isDefault
+    3: bool isProtected
+    4: string webUrl
+}
+
+struct SearchGitlabProjectsReq {
+    1: string query (api.query="query")
+}
+
+struct ListGitlabBranchesReq {
+    1: i32 gitlabProjectId (api.query="gitlabProjectId")
+}
+
+struct GitlabProjectListResp {
+    1: BaseResp base
+    2: list<GitlabProject> list
+}
+
+struct GitlabBranchListResp {
+    1: BaseResp base
+    2: list<GitlabBranch> list
+}
+
 // ==================== 健康 ====================
 
 struct HealthResp {
@@ -398,6 +568,22 @@ service ReleaseCenterService {
     DeploymentResp UpdateDeployment(1: UpdateDeploymentReq req) (api.post="/api/deployments/update")
     BaseOnlyResp DeleteDeployment(1: DeleteDeploymentReq req) (api.post="/api/deployments/delete")
     DeploymentListResp ListDeployments(1: ListDeploymentsReq req) (api.get="/api/deployments")
+
+    RepoResp AddRepo(1: AddRepoReq req) (api.post="/api/projects/repos")
+    BaseOnlyResp DeleteRepo(1: DeleteRepoReq req) (api.post="/api/projects/repos/delete")
+    RepoListResp ListRepos(1: ListReposReq req) (api.get="/api/projects/repos")
+
+    BranchResp CreateReleaseBranch(1: CreateReleaseBranchReq req) (api.post="/api/release-branches")
+    BranchResp CreateFeatureBranch(1: CreateFeatureBranchReq req) (api.post="/api/release-branches/feature")
+    BaseOnlyResp DeleteBranch(1: DeleteBranchReq req) (api.post="/api/release-branches/delete")
+    BranchListResp ListBranches(1: ListBranchesReq req) (api.get="/api/release-branches")
+
+    DockerImageResp AddDockerImage(1: AddDockerImageReq req) (api.post="/api/docker-images")
+    BaseOnlyResp DeleteDockerImage(1: DeleteDockerImageReq req) (api.post="/api/docker-images/delete")
+    DockerImageListResp ListDockerImages(1: ListDockerImagesReq req) (api.get="/api/docker-images")
+
+    GitlabProjectListResp SearchGitlabProjects(1: SearchGitlabProjectsReq req) (api.get="/api/gitlab/search")
+    GitlabBranchListResp ListGitlabBranches(1: ListGitlabBranchesReq req) (api.get="/api/gitlab/branches")
 
     HealthResp Health(1: EmptyReq req) (api.get="/api/health")
 }

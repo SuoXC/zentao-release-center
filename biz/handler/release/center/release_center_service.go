@@ -497,3 +497,72 @@ func ListDeployments(ctx context.Context, c *app.RequestContext) {
 	}
 	c.JSON(consts.StatusOK, &center.DeploymentListResp{Base: &center.BaseResp{Code: 0, Message: "ok"}, List: list})
 }
+
+// ==================== 功能说明 ====================
+
+func AddFeature(ctx context.Context, c *app.RequestContext) {
+	var req center.AddFeatureReq
+	if err := c.BindAndValidate(&req); err != nil {
+		c.JSON(consts.StatusBadRequest, &center.FeatureResp{Base: &center.BaseResp{Code: 400, Message: err.Error()}})
+		return
+	}
+	feature, err := appctx.FeatureSvc.Add(&req)
+	if err != nil {
+		c.JSON(consts.StatusInternalServerError, &center.FeatureResp{Base: &center.BaseResp{Code: 500, Message: err.Error()}})
+		return
+	}
+	c.JSON(consts.StatusOK, &center.FeatureResp{Base: &center.BaseResp{Code: 0, Message: "ok"}, Data: feature})
+}
+
+func UpdateFeature(ctx context.Context, c *app.RequestContext) {
+	var req center.UpdateFeatureReq
+	if err := c.BindAndValidate(&req); err != nil {
+		c.JSON(consts.StatusBadRequest, &center.BaseOnlyResp{Base: &center.BaseResp{Code: 400, Message: err.Error()}})
+		return
+	}
+	if err := appctx.FeatureSvc.Update(&req); err != nil {
+		c.JSON(consts.StatusInternalServerError, &center.BaseOnlyResp{Base: &center.BaseResp{Code: 500, Message: err.Error()}})
+		return
+	}
+	c.JSON(consts.StatusOK, &center.BaseOnlyResp{Base: &center.BaseResp{Code: 0, Message: "ok"}})
+}
+
+func DeleteFeature(ctx context.Context, c *app.RequestContext) {
+	var req center.DeleteFeatureReq
+	if err := c.BindAndValidate(&req); err != nil {
+		c.JSON(consts.StatusBadRequest, &center.BaseOnlyResp{Base: &center.BaseResp{Code: 400, Message: err.Error()}})
+		return
+	}
+	if err := appctx.FeatureSvc.Delete(req.ID); err != nil {
+		c.JSON(consts.StatusInternalServerError, &center.BaseOnlyResp{Base: &center.BaseResp{Code: 500, Message: err.Error()}})
+		return
+	}
+	c.JSON(consts.StatusOK, &center.BaseOnlyResp{Base: &center.BaseResp{Code: 0, Message: "ok"}})
+}
+
+func ListFeatures(ctx context.Context, c *app.RequestContext) {
+	var req center.ListFeaturesReq
+	if err := c.BindAndValidate(&req); err != nil {
+		c.JSON(consts.StatusBadRequest, &center.FeatureListResp{Base: &center.BaseResp{Code: 400, Message: err.Error()}})
+		return
+	}
+	list, err := appctx.FeatureSvc.List(req.ReleaseId)
+	if err != nil {
+		c.JSON(consts.StatusInternalServerError, &center.FeatureListResp{Base: &center.BaseResp{Code: 500, Message: err.Error()}})
+		return
+	}
+	c.JSON(consts.StatusOK, &center.FeatureListResp{Base: &center.BaseResp{Code: 0, Message: "ok"}, List: list})
+}
+
+func ReorderFeatures(ctx context.Context, c *app.RequestContext) {
+	var req center.ReorderFeaturesReq
+	if err := c.BindAndValidate(&req); err != nil {
+		c.JSON(consts.StatusBadRequest, &center.BaseOnlyResp{Base: &center.BaseResp{Code: 400, Message: err.Error()}})
+		return
+	}
+	if err := appctx.FeatureSvc.Reorder(req.ReleaseId, req.Items); err != nil {
+		c.JSON(consts.StatusInternalServerError, &center.BaseOnlyResp{Base: &center.BaseResp{Code: 500, Message: err.Error()}})
+		return
+	}
+	c.JSON(consts.StatusOK, &center.BaseOnlyResp{Base: &center.BaseResp{Code: 0, Message: "ok"}})
+}
