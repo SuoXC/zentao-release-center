@@ -48,5 +48,6 @@ func main() {
 	h := server.Default(server.WithHostPorts(addr))
 
 	register(h)
+	_ = mountFrontend(h)
 	h.Spin()
 }
