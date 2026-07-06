@@ -12,25 +12,35 @@
 
     <div v-if="showCreate" class="card mb-16">
       <h3 style="margin-bottom:16px">新建发布单</h3>
+      <div v-if="!repos.length" class="form-group" style="background:#fff7e6;border:1px solid #ffd591;border-radius:4px;padding:12px;color:#874d00">
+        请先在下方“关联 GitLab 仓库”为本项目添加至少一个仓库，然后才能新建发布单（创建时将自动在所选仓库创建发布分支，二者一一强绑定）。
+      </div>
       <div class="form-group">
         <label>发布单名称 *</label>
         <input v-model="form.name" placeholder="例如：v2.1.0 系统优化版本" />
       </div>
       <div class="form-group">
+        <label>所属 GitLab 仓库 *</label>
+        <select v-model="form.repoId" :disabled="!repos.length">
+          <option value="" disabled>请选择仓库</option>
+          <option v-for="r in repos" :key="r.id" :value="r.id">{{ r.repoName }}</option>
+        </select>
+        <div style="font-size:12px;color:var(--text-tertiary);margin-top:4px">将在该仓库创建发布分支（强绑定，提测期间唯一）</div>
+      </div>
+      <div class="form-group">
         <label>版本号</label>
-        <input v-model="form.version" placeholder="例如：2.1.0（可选）" />
+        <input v-model="form.version" placeholder="例如：2.1.0（可选；分支名会取 release/<version>）" />
       </div>
       <div class="form-group">
         <label>基准分支</label>
-        <input v-model="form.parentBranch" placeholder="例如：main、develop、release/v2.0（可选）" />
-        <div style="font-size:12px;color:var(--text-tertiary);margin-top:4px">各仓库创建分支时的默认基准分支，具体可在分支管理中单独调整</div>
+        <input v-model="form.parentBranch" placeholder="例如：main、develop（默认用所选仓库的默认分支）" />
       </div>
       <div class="form-group">
         <label>概述</label>
         <textarea v-model="form.summary" placeholder="发布概述（可选）" />
       </div>
       <div class="actions">
-        <button class="btn btn-primary" @click="createRelease">创建</button>
+        <button class="btn btn-primary" :disabled="!repos.length || !form.repoId" @click="createRelease">创建</button>
         <button class="btn" @click="showCreate = false">取消</button>
       </div>
     </div>
@@ -164,7 +174,7 @@ const repos = ref<ProjectRepo[]>([])
 const showCreate = ref(false)
 const showAddRepo = ref(false)
 const showRepoConfig = ref(false)
-const form = ref({ name: '', version: '', summary: '', parentBranch: '' })
+const form = ref({ name: '', version: '', summary: '', parentBranch: '', repoId: '' })
 const pageLoading = ref(false)
 const repoSearchQuery = ref('')
 const gitlabSearchResults = ref<GitlabProject[]>([])
@@ -261,6 +271,7 @@ async function deleteRepo(repoId: string) {
 
 async function createRelease() {
   if (!form.value.name) return alert('请输入名称')
+  if (!form.value.repoId) return alert('请选择 GitLab 仓库')
   try {
     await releaseApi.create({
       projectId: route.query.id as string,
@@ -268,8 +279,9 @@ async function createRelease() {
       version: form.value.version || undefined,
       summary: form.value.summary || undefined,
       parentBranch: form.value.parentBranch || undefined,
+      repoId: form.value.repoId,
     })
-    form.value = { name: '', version: '', summary: '', parentBranch: '' }
+    form.value = { name: '', version: '', summary: '', parentBranch: '', repoId: '' }
     showCreate.value = false
     await load()
   } catch {}
