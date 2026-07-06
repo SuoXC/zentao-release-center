@@ -26,13 +26,17 @@
 
     <div v-if="release" class="card mb-16" style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">
       <template v-if="!editingRelease">
+        <div>
+          <span style="color:var(--text-tertiary)">关联分支：</span>
+          <a v-if="releaseBranch" :href="releaseBranch.gitlabBranchUrl" target="_blank" style="font-weight:500;color:var(--primary)">{{ releaseBranch.branchName }}</a>
+          <span v-else style="color:var(--text-tertiary)">未生成</span>
+        </div>
         <div><span style="color:var(--text-tertiary)">版本：</span>{{ release.version || '-' }}</div>
         <div><span style="color:var(--text-tertiary)">基准分支：</span><span style="font-weight:500;color:var(--primary)">{{ release.parentBranch || '未设置' }}</span></div>
         <div><span style="color:var(--text-tertiary)">条目：</span>{{ release.itemCount }}</div>
         <div><span style="color:var(--text-tertiary)">Bug：</span>{{ release.bugCount }}</div>
         <div><span style="color:var(--text-tertiary)">Task：</span>{{ release.taskCount }}</div>
         <div><span style="color:var(--text-tertiary)">备注：</span>{{ release.noteCount }}</div>
-        <div><span style="color:var(--text-tertiary)">部署：</span>{{ deployments.length }}</div>
         <div><span style="color:var(--text-tertiary)">发布次数：</span>{{ release.publishCount }}</div>
         <div v-if="release.summary" style="width:100%"><span style="color:var(--text-tertiary)">概述：</span>{{ release.summary }}</div>
         <button class="btn btn-sm" @click="startEditRelease" style="margin-left:auto">编辑</button>
@@ -57,61 +61,6 @@
         <button class="btn btn-primary btn-sm" @click="saveEditRelease">保存</button>
         <button class="btn btn-sm" @click="editingRelease = false">取消</button>
       </template>
-    </div>
-
-    <!-- 部署地址 -->
-    <div class="card mb-16">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <h3 style="font-size:15px">部署地址</h3>
-        <button class="btn btn-sm" @click="showDeploymentForm = true">添加部署地址</button>
-      </div>
-      <table class="data-table" v-if="deployments.length">
-        <thead><tr><th>功能模块</th><th>地址</th><th>说明</th><th>添加时间</th><th>操作</th></tr></thead>
-        <tbody>
-          <tr v-for="d in deployments" :key="d.id">
-            <template v-if="editingDeploymentId !== d.id">
-              <td>{{ d.moduleName }}</td>
-              <td><a :href="d.address" target="_blank" style="color:var(--primary)">{{ d.address }}</a></td>
-              <td>{{ d.description || '-' }}</td>
-              <td>{{ formatTime(d.createdAt) }}</td>
-              <td class="actions">
-                <button class="btn btn-sm" @click="startEditDeployment(d)">编辑</button>
-                <button class="btn btn-sm btn-danger" @click="removeDeployment(d.id)">删除</button>
-              </td>
-            </template>
-            <template v-else>
-              <td><input v-model="editDeployForm.moduleName" style="width:100%" /></td>
-              <td><input v-model="editDeployForm.address" style="width:100%" /></td>
-              <td><input v-model="editDeployForm.description" style="width:100%" /></td>
-              <td></td>
-              <td class="actions">
-                <button class="btn btn-primary btn-sm" @click="saveEditDeployment">保存</button>
-                <button class="btn btn-sm" @click="editingDeploymentId = ''">取消</button>
-              </td>
-            </template>
-          </tr>
-        </tbody>
-      </table>
-      <div v-else style="color:var(--text-tertiary);padding:12px 0">暂无部署地址，点击「添加部署地址」</div>
-
-      <div v-if="showDeploymentForm" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-        <div style="display:flex;gap:8px;align-items:flex-end">
-          <div class="form-group" style="flex:1;margin-bottom:0">
-            <label style="font-size:12px">功能模块</label>
-            <input v-model="deployForm.moduleName" placeholder="前端服务" />
-          </div>
-          <div class="form-group" style="flex:1.5;margin-bottom:0">
-            <label style="font-size:12px">地址</label>
-            <input v-model="deployForm.address" placeholder="https://web.example.com" />
-          </div>
-          <div class="form-group" style="flex:1;margin-bottom:0">
-            <label style="font-size:12px">说明</label>
-            <input v-model="deployForm.description" placeholder="Nginx容器" />
-          </div>
-          <button class="btn btn-primary btn-sm" @click="submitDeployment">添加</button>
-          <button class="btn btn-sm" @click="showDeploymentForm = false">取消</button>
-        </div>
-      </div>
     </div>
 
     <!-- 功能说明 -->
@@ -325,39 +274,8 @@
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <h3 style="font-size:15px">分支管理</h3>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-sm" @click="showCreateReleaseBranch = true">创建发布分支</button>
+          <span style="color:var(--text-tertiary);font-size:12px">发布分支创建于「新建发布单」时绑定，本页不再单独创建</span>
           <button class="btn btn-sm" @click="showCreateFeatureBranch = true">创建功能分支</button>
-        </div>
-      </div>
-
-      <div v-if="showCreateReleaseBranch" class="card mb-16" style="background:#f8f9fa">
-        <h4 style="margin-bottom:12px">创建发布分支</h4>
-        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-          <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
-            <label style="font-size:12px">选择仓库 *</label>
-            <select v-model="releaseBranchForm.repoId" @change="onReleaseRepoChange" style="width:100%">
-              <option value="">请选择仓库</option>
-              <option v-for="r in projectRepos" :key="r.id" :value="r.id">{{ r.repoName }}</option>
-            </select>
-          </div>
-          <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
-            <label style="font-size:12px">基于分支（父分支） *</label>
-            <select v-model="releaseBranchForm.parentBranch" style="width:100%">
-              <option value="">请选择父分支</option>
-              <option v-for="b in releaseRepoBranches" :key="b.name" :value="b.name">
-                {{ b.name }}{{ b.isDefault ? ' (默认)' : '' }}{{ b.isProtected ? ' 🔒' : '' }}
-              </option>
-            </select>
-            <div v-if="loadingReleaseBranches" style="font-size:12px;color:var(--text-tertiary);margin-top:4px">
-              <span class="loading-spinner"></span> 加载分支中...
-            </div>
-          </div>
-          <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
-            <label style="font-size:12px">新分支名称（可选）</label>
-            <input v-model="releaseBranchForm.branchName" :placeholder="`release/${release?.version || 'v1.0.0'}`" />
-          </div>
-          <button class="btn btn-primary btn-sm" @click="createReleaseBranch" :disabled="!releaseBranchForm.parentBranch">创建</button>
-          <button class="btn btn-sm" @click="showCreateReleaseBranch = false">取消</button>
         </div>
       </div>
 
@@ -470,17 +388,11 @@ report_images:
     fi
     # 上报 server 镜像
     if [ -n "$IMAGE_server" ]; then
-      IMAGE_NAME=$(echo "$IMAGE_server" | sed 's|.*//||' | cut -d: -f1)
-      IMAGE_TAG=$(echo "$IMAGE_server" | cut -d: -f2)
-      REGISTRY=$(echo "$IMAGE_server" | sed 's|.*//||' | cut -d/ -f1)
       curl -s -X POST "${RELEASE_CENTER_URL}/api/ci/build" \
         -H "Content-Type: application/json" \
         -d "{
           \"releaseId\": \"${RELEASE_ID}\",
-          \"imageName\": \"${IMAGE_NAME}\",
-          \"imageTag\": \"${IMAGE_TAG}\",
-          \"registry\": \"${REGISTRY}\",
-          \"branch\": \"${CI_COMMIT_BRANCH}\",
+          \"imageUrl\": \"${IMAGE_server}\",
           \"commitSha\": \"${CI_COMMIT_SHA}\",
           \"commitMessage\": \"$(echo $CI_COMMIT_MESSAGE | head -1)\",
           \"ciPipelineId\": ${CI_PIPELINE_ID},
@@ -506,9 +418,9 @@ report_images:
           <div v-if="poolImages.length" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
             <div v-for="img in poolImages" :key="img.id" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);cursor:hover" @click="selectPoolImage(img)" :style="{background: selectedPoolImage?.id === img.id ? '#e8f0fe' : ''}">
               <div>
-                <div style="font-weight:500">{{ img.imageName }}:{{ img.imageTag }}</div>
+                <div style="font-weight:500">{{ img.imageUrl }}</div>
                 <div style="font-size:12px;color:var(--text-tertiary)">
-                  {{ img.registry }} | {{ img.branch }} | {{ img.commitSha?.substring(0, 8) || '-' }} | {{ img.commitMessage?.substring(0, 30) || '' }}
+                  {{ img.imageDigest ? img.imageDigest.substring(0, 16) : '-' }} | {{ img.commitSha?.substring(0, 8) || '-' }} | {{ img.commitMessage?.substring(0, 30) || '' }}
                 </div>
               </div>
               <span v-if="selectedPoolImage?.id === img.id" style="color:var(--primary)">✓</span>
@@ -523,21 +435,14 @@ report_images:
         </div>
 
         <div v-if="addImageMode === 'manual'" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-          <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
-            <label style="font-size:12px">镜像名称 *</label>
-            <input v-model="imageForm.imageName" placeholder="my-app" />
+          <div class="form-group" style="flex:3;min-width:300px;margin-bottom:0">
+            <label style="font-size:12px">完整镜像链接 *</label>
+            <input v-model="imageForm.imageUrl" placeholder="registry.example.com/my-app:v1.0.0" />
+            <div style="font-size:12px;color:var(--text-tertiary);margin-top:4px">支持 registry/镜像名:tag 完整 URL</div>
           </div>
-          <div class="form-group" style="flex:0.5;min-width:100px;margin-bottom:0">
-            <label style="font-size:12px">Tag *</label>
-            <input v-model="imageForm.imageTag" placeholder="latest" />
-          </div>
-          <div class="form-group" style="flex:1;min-width:150px;margin-bottom:0">
-            <label style="font-size:12px">Registry</label>
-            <input v-model="imageForm.registry" placeholder="registry.example.com" />
-          </div>
-          <div class="form-group" style="flex:1;min-width:100px;margin-bottom:0">
-            <label style="font-size:12px">分支</label>
-            <input v-model="imageForm.branch" placeholder="main" />
+          <div class="form-group" style="flex:1.5;min-width:200px;margin-bottom:0">
+            <label style="font-size:12px">Digest（可选，用于去重）</label>
+            <input v-model="imageForm.imageDigest" placeholder="sha256:..." />
           </div>
           <button class="btn btn-primary btn-sm" @click="addDockerImage">添加</button>
         </div>
@@ -548,21 +453,25 @@ report_images:
         <thead>
           <tr>
             <th>镜像</th>
-            <th>Tag</th>
-            <th>分支</th>
+            <th>Digest</th>
             <th>Commit</th>
             <th>来源</th>
+            <th>已测</th>
             <th>创建时间</th>
             <th>操作</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="img in dockerImages" :key="img.id">
-            <td>{{ img.imageName }}</td>
-            <td>{{ img.imageTag }}</td>
-            <td>{{ img.branch || '-' }}</td>
+            <td><code style="font-size:12px">{{ img.imageUrl }}</code></td>
+            <td><code style="font-size:11px;color:var(--text-tertiary)">{{ img.imageDigest ? img.imageDigest.substring(0, 16) + '…' : '-' }}</code></td>
             <td>{{ img.commitSha ? img.commitSha.substring(0, 8) : '-' }}</td>
             <td><span :class="['badge', img.source === 'manual' ? 'badge-info' : 'badge-success']">{{ img.source === 'manual' ? '手动' : img.source === 'ci' ? 'CI构建' : 'Webhook' }}</span></td>
+            <td>
+              <button :class="['btn btn-sm', img.tested ? 'btn-primary' : 'btn-outline']" @click="toggleTested(img)" :title="img.tested ? '已测，点击取消' : '未测，点击标记为已测'">
+                {{ img.tested ? '已测' : '未测' }}
+              </button>
+            </td>
             <td>{{ formatTime(img.createdAt) }}</td>
             <td><button class="btn btn-sm btn-danger" @click="deleteDockerImage(img.id)">删除</button></td>
           </tr>
@@ -657,20 +566,18 @@ report_images:
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { releaseApi, itemApi, snapshotApi, zentaoApi, projectApi, deploymentApi, healthApi, repoApi, branchApi, dockerImageApi, gitlabApi, featureApi, notifyApi } from '../api'
-import type { Release, ReleaseItem, ReleaseSnapshot, Deployment, ProjectRepo, ReleaseBranch, DockerImage, ReleaseFeature } from '../api'
+import { releaseApi, itemApi, snapshotApi, zentaoApi, projectApi, healthApi, repoApi, branchApi, dockerImageApi, gitlabApi, featureApi, notifyApi } from '../api'
+import type { Release, ReleaseItem, ReleaseSnapshot, ProjectRepo, ReleaseBranch, DockerImage, ReleaseFeature } from '../api'
 
 const route = useRoute()
 const release = ref<Release | null>(null)
 const items = ref<ReleaseItem[]>([])
 const snapshots = ref<ReleaseSnapshot[]>([])
-const deployments = ref<Deployment[]>([])
 const showBugSelector = ref(false)
 const showTaskSelector = ref(false)
 const showNoteForm = ref(false)
 const showSnapshotModal = ref(false)
 const showPreviewModal = ref(false)
-const showDeploymentForm = ref(false)
 const snapshotHtml = ref('')
 const previewHtml = ref('')
 const bugList = ref<any[]>([])
@@ -682,7 +589,6 @@ const taskTotal = ref(0)
 const selectedBugs = ref<any[]>([])
 const selectedTasks = ref<any[]>([])
 const noteForm = ref({ title: '', content: '' })
-const deployForm = ref({ moduleName: '', address: '', description: '' })
 const zentaoBaseUrl = ref('')
 const loading = ref(false)
 const listLoading = ref(false)
@@ -691,25 +597,22 @@ const activeTab = ref<'all' | 'bug' | 'task' | 'note'>('all')
 
 const editingRelease = ref(false)
 const editForm = ref({ name: '', version: '', summary: '', parentBranch: '' })
-const editingDeploymentId = ref('')
-const editDeployForm = ref({ moduleName: '', address: '', description: '' })
 
 const projectRepos = ref<ProjectRepo[]>([])
 const branches = ref<ReleaseBranch[]>([])
 const dockerImages = ref<DockerImage[]>([])
-const showCreateReleaseBranch = ref(false)
 const showCreateFeatureBranch = ref(false)
 const showAddImage = ref(false)
 const addImageMode = ref<'pool' | 'manual'>('pool')
 const poolImages = ref<any[]>([])
 const selectedPoolImage = ref<any>(null)
-const releaseBranchForm = ref({ repoId: '', branchName: '', parentBranch: '' })
 const featureBranchForm = ref({ repoId: '', branchName: '', parentBranch: '' })
-const imageForm = ref({ imageName: '', imageTag: '', registry: '', branch: '' })
+const imageForm = ref({ imageUrl: '', imageDigest: '', commitSha: '', commitMessage: '' })
 
-const releaseRepoBranches = ref<any[]>([])
+// release_branch 的「当前关联分支」：与发布单一对一强绑定
+const releaseBranch = computed(() => branches.value.find(b => b.branchType === 'release'))
+
 const featureRepoBranches = ref<any[]>([])
-const loadingReleaseBranches = ref(false)
 const loadingFeatureBranches = ref(false)
 const editingBranchId = ref('')
 const editBranchDesc = ref('')
@@ -797,7 +700,7 @@ async function load() {
   try {
     const rResp: any = await releaseApi.get(id)
     release.value = rResp?.data || null
-    await Promise.all([loadItems(), loadSnapshots(), loadDeployments(), loadBranches(), loadDockerImages(), loadFeatures()])
+    await Promise.all([loadItems(), loadSnapshots(), loadBranches(), loadDockerImages(), loadFeatures()])
     if (release.value?.projectId) {
       const reposResp: any = await repoApi.list(release.value.projectId)
       projectRepos.value = reposResp?.list || []
@@ -826,14 +729,6 @@ async function loadSnapshots() {
   try {
     const sResp: any = await snapshotApi.list(id)
     snapshots.value = sResp?.list || []
-  } catch {}
-}
-
-async function loadDeployments() {
-  const id = route.query.id as string
-  try {
-    const dResp: any = await deploymentApi.list(id)
-    deployments.value = dResp?.list || []
   } catch {}
 }
 
@@ -950,33 +845,6 @@ async function confirmSendNotify() {
   }
 }
 
-async function onReleaseRepoChange() {
-  releaseBranchForm.value.parentBranch = ''
-  releaseBranchForm.value.branchName = ''
-  if (!releaseBranchForm.value.repoId) {
-    releaseRepoBranches.value = []
-    return
-  }
-  const repo = projectRepos.value.find(r => r.id === releaseBranchForm.value.repoId)
-  if (!repo) return
-  loadingReleaseBranches.value = true
-  try {
-    const resp: any = await gitlabApi.branches(repo.gitlabProjectId)
-    releaseRepoBranches.value = resp?.list || []
-    // 优先使用发布单的基准分支
-    if (release.value?.parentBranch && releaseRepoBranches.value.find(b => b.name === release.value!.parentBranch)) {
-      releaseBranchForm.value.parentBranch = release.value.parentBranch
-    } else {
-      const defaultBranch = releaseRepoBranches.value.find(b => b.isDefault)
-      if (defaultBranch) {
-        releaseBranchForm.value.parentBranch = defaultBranch.name
-      }
-    }
-  } catch {} finally {
-    loadingReleaseBranches.value = false
-  }
-}
-
 async function onFeatureRepoChange() {
   featureBranchForm.value.parentBranch = ''
   featureBranchForm.value.branchName = ''
@@ -1014,23 +882,6 @@ async function onFeatureRepoChange() {
   } finally {
     loadingFeatureBranches.value = false
   }
-}
-
-async function createReleaseBranch() {
-  if (!releaseBranchForm.value.repoId) return alert('请选择仓库')
-  if (!releaseBranchForm.value.parentBranch) return alert('请选择基于分支')
-  try {
-    await branchApi.createRelease({
-      releaseId: route.query.id as string,
-      repoId: releaseBranchForm.value.repoId,
-      branchName: releaseBranchForm.value.branchName || undefined,
-      parentBranch: releaseBranchForm.value.parentBranch,
-    })
-    releaseBranchForm.value = { repoId: '', branchName: '', parentBranch: '' }
-    releaseRepoBranches.value = []
-    showCreateReleaseBranch.value = false
-    await loadBranches()
-  } catch {}
 }
 
 async function createFeatureBranch() {
@@ -1088,10 +939,8 @@ async function addFromPool() {
   try {
     await dockerImageApi.add({
       releaseId: route.query.id as string,
-      imageName: selectedPoolImage.value.imageName,
-      imageTag: selectedPoolImage.value.imageTag,
-      registry: selectedPoolImage.value.registry || undefined,
-      branch: selectedPoolImage.value.branch || undefined,
+      imageUrl: selectedPoolImage.value.imageUrl,
+      imageDigest: selectedPoolImage.value.imageDigest || undefined,
       commitSha: selectedPoolImage.value.commitSha || undefined,
       commitMessage: selectedPoolImage.value.commitMessage || undefined,
     })
@@ -1110,18 +959,28 @@ async function archiveRelease() {
 }
 
 async function addDockerImage() {
-  if (!imageForm.value.imageName || !imageForm.value.imageTag) return alert('请输入镜像名称和Tag')
+  if (!imageForm.value.imageUrl) return alert('请输入完整镜像链接')
   try {
     await dockerImageApi.add({
       releaseId: route.query.id as string,
-      imageName: imageForm.value.imageName,
-      imageTag: imageForm.value.imageTag,
-      registry: imageForm.value.registry || undefined,
-      branch: imageForm.value.branch || undefined,
+      imageUrl: imageForm.value.imageUrl,
+      imageDigest: imageForm.value.imageDigest || undefined,
     })
-    imageForm.value = { imageName: '', imageTag: '', registry: '', branch: '' }
+    imageForm.value = { imageUrl: '', imageDigest: '', commitSha: '', commitMessage: '' }
     showAddImage.value = false
     await loadDockerImages()
+  } catch {}
+}
+
+async function toggleTested(img: DockerImage) {
+  try {
+    const updated: any = await dockerImageApi.update({ id: img.id, tested: !img.tested })
+    if (updated?.data) {
+      const idx = dockerImages.value.findIndex(i => i.id === img.id)
+      if (idx >= 0) dockerImages.value[idx] = updated.data
+    } else {
+      img.tested = !img.tested
+    }
   } catch {}
 }
 
@@ -1151,14 +1010,6 @@ async function removeItem(id: string) {
   } catch {}
 }
 
-async function removeDeployment(id: string) {
-  if (!confirm('确定删除？')) return
-  try {
-    await deploymentApi.delete(id)
-    await loadDeployments()
-  } catch {}
-}
-
 function addNote() {
   noteForm.value = { title: '', content: '' }
   showNoteForm.value = true
@@ -1174,37 +1025,6 @@ async function submitNote() {
     })
     showNoteForm.value = false
     await loadItems()
-  } catch {}
-}
-
-async function submitDeployment() {
-  if (!deployForm.value.moduleName || !deployForm.value.address) {
-    alert('请填写功能模块和地址')
-    return
-  }
-  try {
-    await deploymentApi.add({
-      releaseId: route.query.id as string,
-      moduleName: deployForm.value.moduleName,
-      address: deployForm.value.address,
-      description: deployForm.value.description
-    })
-    deployForm.value = { moduleName: '', address: '', description: '' }
-    showDeploymentForm.value = false
-    await loadDeployments()
-  } catch {}
-}
-
-function startEditDeployment(d: Deployment) {
-  editingDeploymentId.value = d.id
-  editDeployForm.value = { moduleName: d.moduleName, address: d.address, description: d.description }
-}
-
-async function saveEditDeployment() {
-  try {
-    await deploymentApi.update({ id: editingDeploymentId.value, ...editDeployForm.value })
-    editingDeploymentId.value = ''
-    await loadDeployments()
   } catch {}
 }
 
