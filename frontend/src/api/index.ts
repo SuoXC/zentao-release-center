@@ -72,17 +72,6 @@ export interface ReleaseSnapshot {
   publishedAt: string
 }
 
-export interface Deployment {
-  id: string
-  releaseId: string
-  moduleName: string
-  address: string
-  description: string
-  sortOrder: number
-  createdAt: string
-  updatedAt: string
-}
-
 export interface ProjectRepo {
   id: string
   projectId: string
@@ -109,16 +98,25 @@ export interface DockerImage {
   id: string
   releaseId: string
   repoId: string
-  imageName: string
-  imageTag: string
+  imageUrl: string
   imageDigest: string
-  registry: string
   ciPipelineId: number
   ciPipelineUrl: string
-  branch: string
   commitSha: string
   commitMessage: string
   source: string
+  tested: boolean
+  createdAt: string
+}
+
+export interface DockerImagePoolItem {
+  id: string
+  imageUrl: string
+  imageDigest: string
+  commitSha: string
+  commitMessage: string
+  ciPipelineId: number
+  ciPipelineUrl: string
   createdAt: string
 }
 
@@ -161,7 +159,7 @@ export const releaseApi = {
   list: (params: { projectId: string; status?: string; page?: number; pageSize?: number }) =>
     api.get('/releases', { params }),
   get: (id: string) => api.get('/releases/detail', { params: { id } }),
-  create: (data: Partial<Release> & { projectId: string; name: string }) =>
+  create: (data: { projectId: string; name: string; version?: string; summary?: string; parentBranch?: string; repoId: string }) =>
     api.post('/releases', data),
   update: (data: Partial<Release> & { id: string }) => api.post('/releases/update', data),
   delete: (id: string) => api.post('/releases/delete', { id }),
@@ -196,14 +194,6 @@ export const zentaoApi = {
   tasks: (params: Record<string, unknown>) => api.get('/zentao/tasks', { params }),
 }
 
-export const deploymentApi = {
-  list: (releaseId: string) => api.get('/deployments', { params: { releaseId } }),
-  add: (data: { releaseId: string; moduleName: string; address: string; description?: string }) =>
-    api.post('/deployments', data),
-  update: (data: Partial<Deployment> & { id: string }) => api.post('/deployments/update', data),
-  delete: (id: string) => api.post('/deployments/delete', { id }),
-}
-
 export const repoApi = {
   list: (projectId: string) => api.get('/projects/repos', { params: { projectId } }),
   add: (data: { projectId: string; gitlabProjectId: number; repoUrl: string; repoName: string; defaultBranch?: string }) =>
@@ -213,8 +203,6 @@ export const repoApi = {
 
 export const branchApi = {
   list: (releaseId: string) => api.get('/release-branches', { params: { releaseId } }),
-  createRelease: (data: { releaseId: string; repoId: string; branchName?: string; parentBranch?: string }) =>
-    api.post('/release-branches', data),
   createFeature: (data: { releaseId: string; repoId: string; branchName: string; parentBranch?: string }) =>
     api.post('/release-branches/feature', data),
   update: (data: { id: string; description?: string }) => api.post('/release-branches/update', data),
@@ -224,8 +212,10 @@ export const branchApi = {
 export const dockerImageApi = {
   list: (releaseId: string) => api.get('/docker-images', { params: { releaseId } }),
   pool: (gitlabProjectId?: number) => api.get('/docker-images/pool', { params: { gitlabProjectId } }),
-  add: (data: { releaseId: string; repoId?: string; imageName: string; imageTag: string; imageDigest?: string; registry?: string; branch?: string; commitSha?: string; commitMessage?: string }) =>
+  add: (data: { releaseId: string; repoId?: string; imageUrl: string; imageDigest?: string; commitSha?: string; commitMessage?: string }) =>
     api.post('/docker-images', data),
+  update: (data: { id: string; imageUrl?: string; tested?: boolean; commitSha?: string; commitMessage?: string }) =>
+    api.post('/docker-images/update', data),
   delete: (id: string) => api.post('/docker-images/delete', { id }),
 }
 
