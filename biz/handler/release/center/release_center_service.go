@@ -437,67 +437,6 @@ func Health(ctx context.Context, c *app.RequestContext) {
 	})
 }
 
-// AddDeployment .
-// @router /api/deployments [POST]
-func AddDeployment(ctx context.Context, c *app.RequestContext) {
-	var req center.AddDeploymentReq
-	if err := c.BindAndValidate(&req); err != nil {
-		c.JSON(consts.StatusBadRequest, &center.DeploymentResp{Base: &center.BaseResp{Code: 400, Message: err.Error()}})
-		return
-	}
-	dep, err := appctx.DeploymentSvc.Add(&req)
-	if err != nil {
-		c.JSON(consts.StatusInternalServerError, &center.DeploymentResp{Base: &center.BaseResp{Code: 500, Message: err.Error()}})
-		return
-	}
-	c.JSON(consts.StatusOK, &center.DeploymentResp{Base: &center.BaseResp{Code: 0, Message: "ok"}, Data: dep})
-}
-
-func UpdateDeployment(ctx context.Context, c *app.RequestContext) {
-	var req center.UpdateDeploymentReq
-	if err := c.BindAndValidate(&req); err != nil {
-		c.JSON(consts.StatusBadRequest, &center.DeploymentResp{Base: &center.BaseResp{Code: 400, Message: err.Error()}})
-		return
-	}
-	if err := appctx.DeploymentSvc.Update(&req); err != nil {
-		c.JSON(consts.StatusInternalServerError, &center.DeploymentResp{Base: &center.BaseResp{Code: 500, Message: err.Error()}})
-		return
-	}
-	dep, err := appctx.DeploymentSvc.Get(req.ID)
-	if err != nil {
-		c.JSON(consts.StatusInternalServerError, &center.DeploymentResp{Base: &center.BaseResp{Code: 500, Message: err.Error()}})
-		return
-	}
-	c.JSON(consts.StatusOK, &center.DeploymentResp{Base: &center.BaseResp{Code: 0, Message: "ok"}, Data: dep})
-}
-
-func DeleteDeployment(ctx context.Context, c *app.RequestContext) {
-	var req center.DeleteDeploymentReq
-	if err := c.BindAndValidate(&req); err != nil {
-		c.JSON(consts.StatusBadRequest, &center.BaseOnlyResp{Base: &center.BaseResp{Code: 400, Message: err.Error()}})
-		return
-	}
-	if err := appctx.DeploymentSvc.Delete(req.ID); err != nil {
-		c.JSON(consts.StatusInternalServerError, &center.BaseOnlyResp{Base: &center.BaseResp{Code: 500, Message: err.Error()}})
-		return
-	}
-	c.JSON(consts.StatusOK, &center.BaseOnlyResp{Base: &center.BaseResp{Code: 0, Message: "ok"}})
-}
-
-func ListDeployments(ctx context.Context, c *app.RequestContext) {
-	var req center.ListDeploymentsReq
-	if err := c.BindAndValidate(&req); err != nil {
-		c.JSON(consts.StatusBadRequest, &center.DeploymentListResp{Base: &center.BaseResp{Code: 400, Message: err.Error()}})
-		return
-	}
-	list, err := appctx.DeploymentSvc.List(req.ReleaseId)
-	if err != nil {
-		c.JSON(consts.StatusInternalServerError, &center.DeploymentListResp{Base: &center.BaseResp{Code: 500, Message: err.Error()}})
-		return
-	}
-	c.JSON(consts.StatusOK, &center.DeploymentListResp{Base: &center.BaseResp{Code: 0, Message: "ok"}, List: list})
-}
-
 // ==================== 功能说明 ====================
 
 func AddFeature(ctx context.Context, c *app.RequestContext) {

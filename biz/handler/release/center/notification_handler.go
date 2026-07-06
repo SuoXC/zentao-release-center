@@ -42,19 +42,13 @@ func NotifyPreview(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	deployments, err := appctx.ReleaseSvc.GetDeployments(req.ReleaseId)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, map[string]interface{}{"base": map[string]interface{}{"code": 500, "message": fmt.Sprintf("load deployments failed: %v", err)}})
-		return
-	}
-
 	projectName := ""
 	project, _ := appctx.ProjectSvc.GetRaw(release.ProjectKeyword)
 	if project != nil {
 		projectName = project.Name
 	}
 
-	preview := svc.BuildPreview(release, items, deployments, projectName, req.Version)
+	preview := svc.BuildPreview(release, items, projectName, req.Version)
 
 	respBytes, _ := json.Marshal(preview)
 	var respData interface{}
@@ -99,19 +93,13 @@ func NotifySend(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	deployments, err := appctx.ReleaseSvc.GetDeployments(req.ReleaseId)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, map[string]interface{}{"base": map[string]interface{}{"code": 500, "message": fmt.Sprintf("load deployments failed: %v", err)}})
-		return
-	}
-
 	projectName := ""
 	project, _ := appctx.ProjectSvc.GetRaw(release.ProjectKeyword)
 	if project != nil {
 		projectName = project.Name
 	}
 
-	result := svc.SendNow(release, items, deployments, projectName, req.Version)
+	result := svc.SendNow(release, items, projectName, req.Version)
 
 	respBytes, _ := json.Marshal(result)
 	var respData interface{}

@@ -84,7 +84,7 @@ func (s *EmailService) SendToAll(subject, htmlBody string) []error {
 	return errs
 }
 
-func (s *EmailService) BuildReleaseHTML(release *model.Release, items []*model.ReleaseItem, deployments []*model.ReleaseDeployment, projectName, version string) string {
+func (s *EmailService) BuildReleaseHTML(release *model.Release, items []*model.ReleaseItem, projectName, version string) string {
 	var sb strings.Builder
 
 	sb.WriteString(`<!DOCTYPE html>
@@ -146,18 +146,6 @@ th { background: #f5f5f5; }
 		sb.WriteString(fmt.Sprintf("<li>📝 备注: %d 个</li>", len(notes)))
 	}
 	sb.WriteString("</ul>")
-
-	if len(deployments) > 0 {
-		sb.WriteString("<h2>🌐 部署地址</h2><table><tr><th>模块</th><th>地址</th><th>说明</th></tr>")
-		for _, d := range deployments {
-			desc := d.Description
-			if desc == "" {
-				desc = "-"
-			}
-			sb.WriteString(fmt.Sprintf("<tr><td>%s</td><td>%s</td><td>%s</td></tr>", d.ModuleName, d.Address, desc))
-		}
-		sb.WriteString("</table>")
-	}
 
 	if len(bugs) > 0 {
 		sb.WriteString(fmt.Sprintf("<h2>🐛 Bug 修复（%d）</h2>", len(bugs)))

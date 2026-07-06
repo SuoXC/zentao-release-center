@@ -134,19 +134,6 @@ func SnapshotToThrift(s *model.ReleaseSnapshot) *center.ReleaseSnapshot {
 	}
 }
 
-func DeploymentToThrift(d *model.ReleaseDeployment) *center.Deployment {
-	return &center.Deployment{
-		ID:           d.Keyword,
-		ReleaseId:    d.ReleaseKeyword,
-		ModuleName:   d.ModuleName,
-		Address:      d.Address,
-		Description:  d.Description,
-		SortOrder:    int32(d.SortOrder),
-		CreatedAt:    timeStrVal(d.CreatedAt),
-		UpdatedAt:    timeStrVal(d.UpdatedAt),
-	}
-}
-
 func ProjectRepoToThrift(r *model.ProjectRepo) *center.ProjectRepo {
 	return &center.ProjectRepo{
 		ID:              r.Keyword,
@@ -175,20 +162,18 @@ func ReleaseBranchToThrift(b *model.ReleaseBranch) *center.ReleaseBranch {
 
 func DockerImageToThrift(d *model.DockerImage) *center.DockerImage {
 	return &center.DockerImage{
-		ID:             d.Keyword,
-		ReleaseId:      d.ReleaseKeyword,
-		RepoId:         d.RepoKeyword,
-		ImageName:      d.ImageName,
-		ImageTag:       d.ImageTag,
-		ImageDigest:    d.ImageDigest,
-		Registry:       d.Registry,
-		CiPipelineId:   int32(d.CIPipelineID),
-		CiPipelineUrl:  d.CIPipelineURL,
-		Branch:         d.Branch,
-		CommitSha:      d.CommitSHA,
-		CommitMessage:  d.CommitMessage,
-		Source:         d.Source,
-		CreatedAt:      timeStrVal(d.CreatedAt),
+		ID:            d.Keyword,
+		ReleaseId:     d.ReleaseKeyword,
+		RepoId:        d.RepoKeyword,
+		ImageUrl:      d.ImageURL,
+		ImageDigest:   d.ImageDigest,
+		CiPipelineId:  int32(d.CIPipelineID),
+		CiPipelineUrl: d.CIPipelineURL,
+		CommitSha:     d.CommitSHA,
+		CommitMessage: d.CommitMessage,
+		Source:        d.Source,
+		Tested:        d.Tested,
+		CreatedAt:     timeStrVal(d.CreatedAt),
 	}
 }
 

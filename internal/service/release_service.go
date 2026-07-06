@@ -14,32 +14,30 @@ import (
 )
 
 type ReleaseService struct {
-	releaseStore    *store.ReleaseStore
-	itemStore       *store.ItemStore
-	snapshotStore   *store.SnapshotStore
-	projectStore    *store.ProjectStore
-	deploymentStore *store.DeploymentStore
-	repoStore       *store.RepoStore
-	branchStore     *store.BranchStore
+	releaseStore     *store.ReleaseStore
+	itemStore        *store.ItemStore
+	snapshotStore    *store.SnapshotStore
+	projectStore     *store.ProjectStore
+	repoStore        *store.RepoStore
+	branchStore      *store.BranchStore
 	dockerImageStore *store.DockerImageStore
-	featureStore    *store.FeatureStore
-	zentaoClient    *zentao.Client
-	notificationSvc *NotificationService
+	featureStore     *store.FeatureStore
+	zentaoClient     *zentao.Client
+	notificationSvc  *NotificationService
 }
 
 func NewReleaseService(db *gorm.DB, zc *zentao.Client, ns *NotificationService) *ReleaseService {
 	return &ReleaseService{
-		releaseStore:    store.NewReleaseStore(db),
-		itemStore:       store.NewItemStore(db),
-		snapshotStore:   store.NewSnapshotStore(db),
-		projectStore:    store.NewProjectStore(db),
-		deploymentStore: store.NewDeploymentStore(db),
-		repoStore:       store.NewRepoStore(db),
-		branchStore:     store.NewBranchStore(db),
+		releaseStore:     store.NewReleaseStore(db),
+		itemStore:        store.NewItemStore(db),
+		snapshotStore:    store.NewSnapshotStore(db),
+		projectStore:     store.NewProjectStore(db),
+		repoStore:        store.NewRepoStore(db),
+		branchStore:      store.NewBranchStore(db),
 		dockerImageStore: store.NewDockerImageStore(db),
-		featureStore:    store.NewFeatureStore(db),
-		zentaoClient:    zc,
-		notificationSvc: ns,
+		featureStore:     store.NewFeatureStore(db),
+		zentaoClient:     zc,
+		notificationSvc:  ns,
 	}
 }
 
@@ -370,11 +368,6 @@ func (rs *ReleaseService) Publish(releaseKeyword, version string) (*center.Relea
 		return nil, err
 	}
 
-	deployments, err := rs.deploymentStore.ListByRelease(releaseKeyword)
-	if err != nil {
-		return nil, err
-	}
-
 	branches, err := rs.branchStore.ListByRelease(releaseKeyword)
 	if err != nil {
 		return nil, err
@@ -394,10 +387,6 @@ func (rs *ReleaseService) Publish(releaseKeyword, version string) (*center.Relea
 	for i, item := range items {
 		thriftItems[i] = mapper.ItemToThrift(item)
 	}
-	thriftDeps := make([]*center.Deployment, len(deployments))
-	for i, dep := range deployments {
-		thriftDeps[i] = mapper.DeploymentToThrift(dep)
-	}
 	thriftBranches := make([]*center.ReleaseBranch, len(branches))
 	for i, b := range branches {
 		thriftBranches[i] = mapper.ReleaseBranchToThrift(b)
@@ -412,7 +401,7 @@ func (rs *ReleaseService) Publish(releaseKeyword, version string) (*center.Relea
 	}
 	thriftRel := mapper.ReleaseToThrift(rel, "", total, bugs, tasks, notes)
 
-	content := rs.generateMarkdown(thriftRel, thriftItems, thriftDeps, thriftBranches, thriftImages, thriftFeatures, version)
+	content := rs.generateMarkdown(thriftRel, thriftItems, thriftBranches, thriftImages, thriftFeatures, version)
 
 	snap, err := rs.snapshotStore.Create(releaseKeyword, version, content, total, bugs, tasks, notes)
 	if err != nil {
@@ -429,7 +418,7 @@ func (rs *ReleaseService) Publish(releaseKeyword, version string) (*center.Relea
 		if project != nil {
 			projectName = project.Name
 		}
-		go rs.notificationSvc.NotifyReleasePublished(rel, items, deployments, projectName, version)
+		go rs.notificationSvc.NotifyReleasePublished(rel, items, projectName, version)
 	}
 
 	return mapper.SnapshotToThrift(snap), nil
@@ -478,10 +467,6 @@ func (rs *ReleaseService) Export(releaseKeyword, snapshotKeyword, format string)
 		if err != nil {
 			return "", "", err
 		}
-		deployments, err := rs.deploymentStore.ListByRelease(releaseKeyword)
-		if err != nil {
-			return "", "", err
-		}
 		branches, err := rs.branchStore.ListByRelease(releaseKeyword)
 		if err != nil {
 			return "", "", err
@@ -500,10 +485,6 @@ func (rs *ReleaseService) Export(releaseKeyword, snapshotKeyword, format string)
 		for i, item := range items {
 			thriftItems[i] = mapper.ItemToThrift(item)
 		}
-		thriftDeps := make([]*center.Deployment, len(deployments))
-		for i, dep := range deployments {
-			thriftDeps[i] = mapper.DeploymentToThrift(dep)
-		}
 		thriftBranches := make([]*center.ReleaseBranch, len(branches))
 		for i, b := range branches {
 			thriftBranches[i] = mapper.ReleaseBranchToThrift(b)
@@ -518,7 +499,7 @@ func (rs *ReleaseService) Export(releaseKeyword, snapshotKeyword, format string)
 		}
 		thriftRel := mapper.ReleaseToThrift(rel, "", 0, 0, 0, 0)
 
-		content = rs.generateMarkdown(thriftRel, thriftItems, thriftDeps, thriftBranches, thriftImages, thriftFeatures, rel.Version)
+		content = rs.generateMarkdown(thriftRel, thriftItems, thriftBranches, thriftImages, thriftFeatures, rel.Version)
 	}
 
 	if format == "html" {
@@ -528,7 +509,7 @@ func (rs *ReleaseService) Export(releaseKeyword, snapshotKeyword, format string)
 	return content, version, nil
 }
 
-func (rs *ReleaseService) generateMarkdown(rel *center.Release, items []*center.ReleaseItem, deployments []*center.Deployment, branches []*center.ReleaseBranch, images []*center.DockerImage, features []*center.ReleaseFeature, version string) string {
+func (rs *ReleaseService) generateMarkdown(rel *center.Release, items []*center.ReleaseItem, branches []*center.ReleaseBranch, images []*center.DockerImage, features []*center.ReleaseFeature, version string) string {
 	var sb strings.Builder
 
 	sb.WriteString("# ")
@@ -556,20 +537,6 @@ func (rs *ReleaseService) generateMarkdown(rel *center.Release, items []*center.
 		}
 	}
 
-	if len(deployments) > 0 {
-		sb.WriteString("## 部署地址\n\n")
-		sb.WriteString("| 功能模块 | 地址 | 说明 |\n")
-		sb.WriteString("|---------|------|------|\n")
-		for _, d := range deployments {
-			desc := d.Description
-			if desc == "" {
-				desc = "-"
-			}
-			sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", d.ModuleName, d.Address, desc))
-		}
-		sb.WriteString("\n")
-	}
-
 	if len(branches) > 0 {
 		sb.WriteString("## 分支信息\n\n")
 		sb.WriteString("| 分支名 | 类型 | 父分支 |\n")
@@ -586,14 +553,26 @@ func (rs *ReleaseService) generateMarkdown(rel *center.Release, items []*center.
 
 	if len(images) > 0 {
 		sb.WriteString("## Docker 镜像\n\n")
-		sb.WriteString("| 镜像名称 | Tag | Registry | 来源 |\n")
-		sb.WriteString("|----------|-----|----------|------|\n")
+		sb.WriteString("| 镜像 | Commit | 来源 | 已测 |\n")
+		sb.WriteString("|------|--------|------|------|\n")
 		for _, img := range images {
-			registry := img.Registry
-			if registry == "" {
-				registry = "-"
+			tested := "否"
+			if img.Tested {
+				tested = "是"
 			}
-			sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", img.ImageName, img.ImageTag, registry, img.Source))
+			url := img.ImageUrl
+			if url == "" {
+				url = "-"
+			}
+			commit := img.CommitSha
+			if commit == "" {
+				commit = "-"
+			}
+			source := img.Source
+			if source == "" {
+				source = "-"
+			}
+			sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", url, commit, source, tested))
 		}
 		sb.WriteString("\n")
 	}
@@ -816,8 +795,4 @@ func (rs *ReleaseService) GetRaw(keyword string) (*model.Release, error) {
 
 func (rs *ReleaseService) GetRawItems(releaseKeyword string) ([]*model.ReleaseItem, error) {
 	return rs.itemStore.ListByRelease(releaseKeyword)
-}
-
-func (rs *ReleaseService) GetDeployments(releaseKeyword string) ([]*model.ReleaseDeployment, error) {
-	return rs.deploymentStore.ListByRelease(releaseKeyword)
 }

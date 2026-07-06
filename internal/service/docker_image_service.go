@@ -38,25 +38,19 @@ func (ds *DockerImageService) AddManual(req *center.AddDockerImageReq) (*center.
 	if req.ReleaseId == "" {
 		return nil, fmt.Errorf("releaseId is required")
 	}
-	if req.ImageName == "" {
-		return nil, fmt.Errorf("imageName is required")
-	}
-	if req.ImageTag == "" {
-		return nil, fmt.Errorf("imageTag is required")
+	if req.ImageUrl == "" {
+		return nil, fmt.Errorf("imageUrl is required")
 	}
 
 	image, err := ds.imageStore.Create(
 		req.ReleaseId,
 		req.GetRepoId(),
-		req.ImageName,
-		req.ImageTag,
+		req.ImageUrl,
 		req.GetImageDigest(),
-		req.GetRegistry(),
-		0, "",
-		req.GetBranch(),
 		req.GetCommitSha(),
 		req.GetCommitMessage(),
 		"manual",
+		0, "",
 	)
 	if err != nil {
 		return nil, err
@@ -74,29 +68,23 @@ func (ds *DockerImageService) AddFromWebhook(event *gitlab.PipelineEvent) error 
 	var repo model.ProjectRepo
 	if err := ds.db.Where("gitlab_project_id = ?", gitlabProjectID).First(&repo).Error; err != nil {
 		// 没有关联仓库，仍然保存到池中
-		ds.poolStore.Create(gitlabProjectID, fmt.Sprintf("pipeline-%d", event.ObjectAttributes.ID), "latest", "", "",
-			event.ObjectAttributes.ID, event.ObjectAttributes.WebURL,
-			event.ObjectAttributes.Ref, event.Commit.ID, event.Commit.Message)
+		ds.poolStore.Create(gitlabProjectID, fmt.Sprintf("pipeline-%d:no-repo", event.ObjectAttributes.ID),
+			"", event.Commit.ID, event.Commit.Message,
+			event.ObjectAttributes.ID, event.ObjectAttributes.WebURL)
 		return nil
 	}
 
-	branch := event.ObjectAttributes.Ref
 	commitSHA := event.Commit.ID
 	commitMessage := event.Commit.Message
 	pipelineID := event.ObjectAttributes.ID
 	pipelineURL := event.ObjectAttributes.WebURL
-
-	imageName, imageTag, registry := extractImageInfo(event)
-	if imageName == "" {
-		imageName = fmt.Sprintf("%s-%s", repo.RepoName, branch)
-	}
-	if imageTag == "" {
-		imageTag = commitSHA[:8]
+	imageURL := buildImageURL(event, repo.RepoName)
+	if imageURL == "" {
+		imageURL = fmt.Sprintf("%s-pipeline-%d:%s", repo.RepoName, pipelineID, commitSHA)
 	}
 
 	// 保存到全局镜像池
-	ds.poolStore.Create(gitlabProjectID, imageName, imageTag, "", registry,
-		pipelineID, pipelineURL, branch, commitSHA, commitMessage)
+	ds.poolStore.Create(gitlabProjectID, imageURL, "", commitSHA, commitMessage, pipelineID, pipelineURL)
 
 	// 查找所有 draft 状态的发布单并添加镜像
 	var releases []model.Release
@@ -106,24 +94,21 @@ func (ds *DockerImageService) AddFromWebhook(event *gitlab.PipelineEvent) error 
 		ds.imageStore.Create(
 			rel.Keyword,
 			repo.Keyword,
-			imageName,
-			imageTag,
+			imageURL,
 			"",
-			registry,
-			pipelineID,
-			pipelineURL,
-			branch,
 			commitSHA,
 			commitMessage,
 			"webhook",
+			pipelineID,
+			pipelineURL,
 		)
 	}
 	return nil
 }
 
 func (ds *DockerImageService) AddFromCIBuild(req *center.CIBuildReq) error {
-	if req.ImageName == "" {
-		return fmt.Errorf("imageName is required")
+	if req.ImageUrl == "" {
+		return fmt.Errorf("imageUrl is required")
 	}
 
 	// 尝试找到仓库
@@ -144,24 +129,22 @@ func (ds *DockerImageService) AddFromCIBuild(req *center.CIBuildReq) error {
 	}
 
 	// 保存到全局镜像池
-	ds.poolStore.Create(gitlabProjectID, req.ImageName, req.GetImageTag(), req.GetImageDigest(), req.GetRegistry(),
-		int(req.GetCiPipelineId()), req.GetCiPipelineUrl(), req.GetBranch(), req.GetCommitSha(), req.GetCommitMessage())
+	ds.poolStore.Create(gitlabProjectID, req.ImageUrl, req.GetImageDigest(),
+		req.GetCommitSha(), req.GetCommitMessage(),
+		int(req.GetCiPipelineId()), req.GetCiPipelineUrl())
 
 	// 如果指定了发布单，直接添加
 	if req.ReleaseId != "" {
 		_, err := ds.imageStore.Create(
 			req.ReleaseId,
 			req.GetRepoId(),
-			req.ImageName,
-			req.GetImageTag(),
+			req.ImageUrl,
 			req.GetImageDigest(),
-			req.GetRegistry(),
-			int(req.GetCiPipelineId()),
-			req.GetCiPipelineUrl(),
-			req.GetBranch(),
 			req.GetCommitSha(),
 			req.GetCommitMessage(),
 			"ci",
+			int(req.GetCiPipelineId()),
+			req.GetCiPipelineUrl(),
 		)
 		return err
 	}
@@ -194,16 +177,14 @@ func (ds *DockerImageService) ListPool(gitlabProjectID int) ([]*center.DockerIma
 	result := make([]*center.DockerImagePoolItem, len(images))
 	for i, img := range images {
 		result[i] = &center.DockerImagePoolItem{
-			ID:             img.Keyword,
-			ImageName:      img.ImageName,
-			ImageTag:       img.ImageTag,
-			Registry:       img.Registry,
-			Branch:         img.Branch,
-			CommitSha:      img.CommitSHA,
-			CommitMessage:  img.CommitMessage,
-			CiPipelineId:   int32(img.CIPipelineID),
-			CiPipelineUrl:  img.CIPipelineURL,
-			CreatedAt:      img.CreatedAt.Format("2006-01-02 15:04:05"),
+			ID:            img.Keyword,
+			ImageUrl:      img.ImageURL,
+			ImageDigest:   img.ImageDigest,
+			CommitSha:     img.CommitSHA,
+			CommitMessage: img.CommitMessage,
+			CiPipelineId:  int32(img.CIPipelineID),
+			CiPipelineUrl: img.CIPipelineURL,
+			CreatedAt:     img.CreatedAt.Format("2006-01-02 15:04:05"),
 		}
 	}
 	return result, nil
@@ -213,7 +194,41 @@ func (ds *DockerImageService) Delete(keyword string) error {
 	return ds.imageStore.Delete(keyword)
 }
 
-func extractImageInfo(event *gitlab.PipelineEvent) (imageName, imageTag, registry string) {
+func (ds *DockerImageService) Update(req *center.UpdateDockerImageReq) (*center.DockerImage, error) {
+	if req.ID == "" {
+		return nil, fmt.Errorf("id is required")
+	}
+	fields := map[string]interface{}{}
+	if req.IsSetImageUrl() {
+		fields["image_url"] = req.GetImageUrl()
+	}
+	if req.IsSetTested() {
+		fields["tested"] = req.GetTested()
+	}
+	if req.IsSetCommitSha() {
+		fields["commit_sha"] = req.GetCommitSha()
+	}
+	if req.IsSetCommitMessage() {
+		fields["commit_message"] = req.GetCommitMessage()
+	}
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("no fields to update")
+	}
+	image, err := ds.imageStore.Update(req.ID, fields)
+	if err != nil {
+		return nil, err
+	}
+	if image == nil {
+		return nil, fmt.Errorf("image not found")
+	}
+	return mapper.DockerImageToThrift(image), nil
+}
+
+// buildImageURL 从 webhook 中提取完整镜像 URL（若 CI 携带了 IMAGE_NAME/CI_REGISTRY_IMAGE 等变量）。
+func buildImageURL(event *gitlab.PipelineEvent, fallbackName string) string {
+	registry := ""
+	name := ""
+	tag := ""
 	if event.Variables != nil {
 		for _, v := range event.Variables {
 			switch v.Key {
@@ -221,27 +236,34 @@ func extractImageInfo(event *gitlab.PipelineEvent) (imageName, imageTag, registr
 				parts := strings.SplitN(v.Value, "/", 2)
 				if len(parts) == 2 {
 					registry = parts[0]
-					imageName = parts[1]
+					name = parts[1]
 				} else {
-					imageName = v.Value
+					name = v.Value
 				}
 			case "IMAGE_NAME":
-				imageName = v.Value
-			case "IMAGE_TAG":
-				imageTag = v.Value
+				name = v.Value
 			case "CI_REGISTRY":
 				registry = v.Value
+			case "IMAGE_TAG":
+				tag = v.Value
 			}
 		}
 	}
-	if imageTag == "" {
-		imageTag = event.ObjectAttributes.Ref
-		if imageTag == "" {
-			imageTag = "latest"
+	if name == "" {
+		name = fallbackName
+		if name == "" {
+			return ""
 		}
 	}
-	if imageName != "" {
-		imageName = strings.TrimPrefix(imageName, "/")
+	if tag == "" {
+		tag = event.ObjectAttributes.Ref
+		if tag == "" {
+			tag = "latest"
+		}
 	}
-	return imageName, imageTag, registry
+	name = strings.TrimPrefix(name, "/")
+	if registry != "" {
+		return fmt.Sprintf("%s/%s:%s", registry, name, tag)
+	}
+	return fmt.Sprintf("%s:%s", name, tag)
 }

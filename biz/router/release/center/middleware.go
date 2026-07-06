@@ -191,31 +191,6 @@ func _getzentaotasksMw() []app.HandlerFunc {
 	return nil
 }
 
-func _listdeploymentsMw() []app.HandlerFunc {
-	// your code...
-	return nil
-}
-
-func _deploymentsMw() []app.HandlerFunc {
-	// your code...
-	return nil
-}
-
-func _adddeploymentMw() []app.HandlerFunc {
-	// your code...
-	return nil
-}
-
-func _deletedeploymentMw() []app.HandlerFunc {
-	// your code...
-	return nil
-}
-
-func _updatedeploymentMw() []app.HandlerFunc {
-	// your code...
-	return nil
-}
-
 func _projects1Mw() []app.HandlerFunc {
 	return nil
 }

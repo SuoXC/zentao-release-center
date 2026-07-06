@@ -104,7 +104,7 @@ func (s *LanxinService) Send(message string) error {
 	return nil
 }
 
-func (s *LanxinService) BuildReleaseMessage(release *model.Release, items []*model.ReleaseItem, deployments []*model.ReleaseDeployment, projectName, version string) string {
+func (s *LanxinService) BuildReleaseMessage(release *model.Release, items []*model.ReleaseItem, projectName, version string) string {
 	var msg string
 	msg += "📦 发布单通知\n"
 	msg += "━━━━━━━━━━━━━━━━━━━━\n"
@@ -137,13 +137,6 @@ func (s *LanxinService) BuildReleaseMessage(release *model.Release, items []*mod
 	}
 	if len(notes) > 0 {
 		msg += fmt.Sprintf("  📝 备注: %d 个\n", len(notes))
-	}
-
-	if len(deployments) > 0 {
-		msg += "\n🌐 部署地址:\n"
-		for _, d := range deployments {
-			msg += fmt.Sprintf("  • %s: %s\n", d.ModuleName, d.Address)
-		}
 	}
 
 	if len(bugs) > 0 {

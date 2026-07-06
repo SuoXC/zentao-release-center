@@ -461,16 +461,14 @@ func (p *CIBuildReq) IsSetCommitSha() bool      { return p.CommitSha != nil }
 func (p *CIBuildReq) IsSetCommitMessage() bool { return p.CommitMessage != nil }
 
 type DockerImagePoolItem struct {
-	ID             string `thrift:"id,1" form:"id" json:"id"`
-	ImageName      string `thrift:"imageName,2" form:"imageName" json:"imageName"`
-	ImageTag       string `thrift:"imageTag,3" form:"imageTag" json:"imageTag"`
-	Registry       string `thrift:"registry,4" form:"registry" json:"registry"`
-	Branch         string `thrift:"branch,5" form:"branch" json:"branch"`
-	CommitSha      string `thrift:"commitSha,6" form:"commitSha" json:"commitSha"`
-	CommitMessage  string `thrift:"commitMessage,7" form:"commitMessage" json:"commitMessage"`
-	CiPipelineId   int32  `thrift:"ciPipelineId,8" form:"ciPipelineId" json:"ciPipelineId"`
-	CiPipelineUrl  string `thrift:"ciPipelineUrl,9" form:"ciPipelineUrl" json:"ciPipelineUrl"`
-	CreatedAt      string `thrift:"createdAt,10" form:"createdAt" json:"createdAt"`
+	ID            string `thrift:"id,1" form:"id" json:"id"`
+	ImageUrl      string `thrift:"imageUrl,2" form:"imageUrl" json:"imageUrl"`
+	ImageDigest   string `thrift:"imageDigest,3" form:"imageDigest" json:"imageDigest"`
+	CommitSha     string `thrift:"commitSha,4" form:"commitSha" json:"commitSha"`
+	CommitMessage string `thrift:"commitMessage,5" form:"commitMessage" json:"commitMessage"`
+	CiPipelineId  int32  `thrift:"ciPipelineId,6" form:"ciPipelineId" json:"ciPipelineId"`
+	CiPipelineUrl string `thrift:"ciPipelineUrl,7" form:"ciPipelineUrl" json:"ciPipelineUrl"`
+	CreatedAt     string `thrift:"createdAt,8" form:"createdAt" json:"createdAt"`
 }
 
 type ListDockerImagePoolReq struct {

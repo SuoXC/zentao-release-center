@@ -149,7 +149,10 @@ func main() {
 		fmt.Printf("    部署: %s → %s\n", d.module, d.address)
 	}
 
+	// Deployments removed
+
 	// Snapshots (for published releases)
+	_ = deployments
 	snapshots := []struct {
 		id, releaseID, version, content string
 		bugs, tasks, notes              int
@@ -177,7 +180,6 @@ func main() {
 	fmt.Printf("  项目: %d\n", len(projects))
 	fmt.Printf("  发布单: %d\n", len(releases))
 	fmt.Printf("  条目: %d\n", len(items))
-	fmt.Printf("  部署地址: %d\n", len(deployments))
 	fmt.Printf("  快照: %d\n", len(snapshots))
 }
 
@@ -246,18 +248,6 @@ func migrate(db *sql.DB) error {
 		FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_snapshots_release ON release_snapshots(release_id);
-	CREATE TABLE IF NOT EXISTS release_deployments (
-		id TEXT PRIMARY KEY,
-		release_id TEXT NOT NULL,
-		module_name TEXT NOT NULL,
-		address TEXT NOT NULL,
-		description TEXT DEFAULT '',
-		sort_order INTEGER DEFAULT 0,
-		created_at DATETIME NOT NULL,
-		updated_at DATETIME NOT NULL,
-		FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE
-	);
-	CREATE INDEX IF NOT EXISTS idx_deployments_release ON release_deployments(release_id);
 	`
 	_, err := db.Exec(schema)
 	return err

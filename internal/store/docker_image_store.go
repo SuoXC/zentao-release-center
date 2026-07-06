@@ -14,18 +14,15 @@ func NewDockerImageStore(db *gorm.DB) *DockerImageStore {
 	return &DockerImageStore{db: db}
 }
 
-func (ds *DockerImageStore) Create(releaseKeyword, repoKeyword, imageName, imageTag, imageDigest, registry string, ciPipelineID int, ciPipelineURL, branch, commitSHA, commitMessage, source string) (*model.DockerImage, error) {
+func (ds *DockerImageStore) Create(releaseKeyword, repoKeyword, imageURL, imageDigest, commitSHA, commitMessage, source string, ciPipelineID int, ciPipelineURL string) (*model.DockerImage, error) {
 	d := &model.DockerImage{
 		Keyword:        uuid.New().String(),
 		ReleaseKeyword: releaseKeyword,
 		RepoKeyword:    repoKeyword,
-		ImageName:      imageName,
-		ImageTag:       imageTag,
+		ImageURL:       imageURL,
 		ImageDigest:    imageDigest,
-		Registry:       registry,
 		CIPipelineID:   ciPipelineID,
 		CIPipelineURL:  ciPipelineURL,
-		Branch:         branch,
 		CommitSHA:      commitSHA,
 		CommitMessage:  commitMessage,
 		Source:         source,
@@ -57,4 +54,11 @@ func (ds *DockerImageStore) ListByRelease(releaseKeyword string) ([]*model.Docke
 
 func (ds *DockerImageStore) Delete(keyword string) error {
 	return ds.db.Where("keyword = ?", keyword).Delete(&model.DockerImage{}).Error
+}
+
+func (ds *DockerImageStore) Update(keyword string, fields map[string]interface{}) (*model.DockerImage, error) {
+	if err := ds.db.Model(&model.DockerImage{}).Where("keyword = ?", keyword).Updates(fields).Error; err != nil {
+		return nil, err
+	}
+	return ds.GetByKeyword(keyword)
 }

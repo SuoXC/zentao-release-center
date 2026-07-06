@@ -14,11 +14,11 @@ func NewDockerImagePoolStore(db *gorm.DB) *DockerImagePoolStore {
 	return &DockerImagePoolStore{db: db}
 }
 
-func (ps *DockerImagePoolStore) Create(gitlabProjectID int, imageName, imageTag, imageDigest, registry string, ciPipelineID int, ciPipelineURL, branch, commitSHA, commitMessage string) (*model.DockerImagePool, error) {
+func (ps *DockerImagePoolStore) Create(gitlabProjectID int, imageURL, imageDigest, commitSHA, commitMessage string, ciPipelineID int, ciPipelineURL string) (*model.DockerImagePool, error) {
 	// 检查是否已存在（去重）
 	var existing model.DockerImagePool
-	err := ps.db.Where("gitlab_project_id = ? AND image_name = ? AND image_tag = ? AND commit_sha = ?",
-		gitlabProjectID, imageName, imageTag, commitSHA).First(&existing).Error
+	err := ps.db.Where("gitlab_project_id = ? AND image_url = ? AND commit_sha = ?",
+		gitlabProjectID, imageURL, commitSHA).First(&existing).Error
 	if err == nil {
 		return &existing, nil // 已存在，返回现有记录
 	}
@@ -26,13 +26,10 @@ func (ps *DockerImagePoolStore) Create(gitlabProjectID int, imageName, imageTag,
 	p := &model.DockerImagePool{
 		Keyword:         uuid.New().String(),
 		GitlabProjectID: gitlabProjectID,
-		ImageName:       imageName,
-		ImageTag:        imageTag,
+		ImageURL:        imageURL,
 		ImageDigest:     imageDigest,
-		Registry:        registry,
 		CIPipelineID:    ciPipelineID,
 		CIPipelineURL:   ciPipelineURL,
-		Branch:          branch,
 		CommitSHA:       commitSHA,
 		CommitMessage:   commitMessage,
 	}

@@ -19,11 +19,6 @@ func Register(r *server.Hertz) {
 	root := r.Group("/", rootMw()...)
 	{
 		_api := root.Group("/api", _apiMw()...)
-		_api.GET("/deployments", append(_listdeploymentsMw(), center.ListDeployments)...)
-		_api.POST("/deployments", append(_adddeploymentMw(), center.AddDeployment)...)
-		_deployments := _api.Group("/deployments", _deploymentsMw()...)
-		_deployments.POST("/delete", append(_deletedeploymentMw(), center.DeleteDeployment)...)
-		_deployments.POST("/update", append(_updatedeploymentMw(), center.UpdateDeployment)...)
 		_api.GET("/health", append(_healthMw(), center.Health)...)
 		_api.GET("/projects", append(_listprojectsMw(), center.ListProjects)...)
 		_projects := _api.Group("/projects", _projectsMw()...)

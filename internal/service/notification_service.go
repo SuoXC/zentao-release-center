@@ -39,7 +39,6 @@ func NewNotificationService(lanxinSvc *LanxinService, emailSvc *EmailService) *N
 func (s *NotificationService) BuildPreview(
 	release *model.Release,
 	items []*model.ReleaseItem,
-	deployments []*model.ReleaseDeployment,
 	projectName, version string,
 ) *NotifyPreview {
 	preview := &NotifyPreview{
@@ -47,11 +46,11 @@ func (s *NotificationService) BuildPreview(
 		EmailEnabled:  s.emailSvc != nil && s.emailSvc.IsEnabled(),
 	}
 	if preview.LanxinEnabled {
-		preview.LanxinMessage = s.lanxinSvc.BuildReleaseMessage(release, items, deployments, projectName, version)
+		preview.LanxinMessage = s.lanxinSvc.BuildReleaseMessage(release, items, projectName, version)
 	}
 	if preview.EmailEnabled {
 		preview.EmailSubject = s.emailSvc.BuildReleaseSubject(release, projectName, version)
-		preview.EmailHTML = s.emailSvc.BuildReleaseHTML(release, items, deployments, projectName, version)
+		preview.EmailHTML = s.emailSvc.BuildReleaseHTML(release, items, projectName, version)
 		preview.EmailTo = s.emailSvc.GetRecipients()
 	}
 	return preview
@@ -60,7 +59,6 @@ func (s *NotificationService) BuildPreview(
 func (s *NotificationService) SendNow(
 	release *model.Release,
 	items []*model.ReleaseItem,
-	deployments []*model.ReleaseDeployment,
 	projectName, version string,
 ) *NotifyResult {
 	result := &NotifyResult{}
@@ -70,7 +68,7 @@ func (s *NotificationService) SendNow(
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			msg := s.lanxinSvc.BuildReleaseMessage(release, items, deployments, projectName, version)
+			msg := s.lanxinSvc.BuildReleaseMessage(release, items, projectName, version)
 			if err := s.lanxinSvc.Send(msg); err != nil {
 				result.LanxinError = err.Error()
 				log.Printf("[Notification] lanxin send failed: %v", err)
@@ -86,7 +84,7 @@ func (s *NotificationService) SendNow(
 		go func() {
 			defer wg.Done()
 			subject := s.emailSvc.BuildReleaseSubject(release, projectName, version)
-			htmlBody := s.emailSvc.BuildReleaseHTML(release, items, deployments, projectName, version)
+			htmlBody := s.emailSvc.BuildReleaseHTML(release, items, projectName, version)
 			if errs := s.emailSvc.SendToAll(subject, htmlBody); len(errs) > 0 {
 				for _, err := range errs {
 					result.EmailError += fmt.Sprintf("%v; ", err)
@@ -106,9 +104,8 @@ func (s *NotificationService) SendNow(
 func (s *NotificationService) NotifyReleasePublished(
 	release *model.Release,
 	items []*model.ReleaseItem,
-	deployments []*model.ReleaseDeployment,
 	projectName string,
 	version string,
 ) {
-	s.SendNow(release, items, deployments, projectName, version)
+	s.SendNow(release, items, projectName, version)
 }

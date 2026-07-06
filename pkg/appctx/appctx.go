@@ -8,7 +8,6 @@ var (
 	ProjectSvc          *service.ProjectService
 	ReleaseSvc          *service.ReleaseService
 	ZentaoProxy         *service.ZentaoProxyService
-	DeploymentSvc       *service.DeploymentService
 	GitLabSvc           *service.GitLabService
 	DockerImageSvc      *service.DockerImageService
 	FeatureSvc          *service.FeatureService

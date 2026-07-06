@@ -66,16 +66,6 @@ type ReleaseSnapshot struct {
 	PublishedAt         time.Time
 }
 
-type ReleaseDeployment struct {
-	gorm.Model          `json:"-"`
-	Keyword             string `json:"-" gorm:"uniqueIndex;size:36"`
-	ReleaseKeyword      string `gorm:"index;size:36"`
-	ModuleName          string
-	Address             string
-	Description         string `gorm:"default:''"`
-	SortOrder           int    `gorm:"default:0"`
-}
-
 type ProjectRepo struct {
 	gorm.Model          `json:"-"`
 	Keyword             string `json:"-" gorm:"uniqueIndex;size:36"`
@@ -103,29 +93,24 @@ type DockerImage struct {
 	Keyword             string `json:"-" gorm:"uniqueIndex;size:36"`
 	ReleaseKeyword      string `gorm:"index;size:36"`
 	RepoKeyword         string `gorm:"index;size:36"`
-	ImageName           string
-	ImageTag            string
+	ImageURL            string `gorm:"default:''"`
 	ImageDigest         string `gorm:"default:''"`
-	Registry            string `gorm:"default:''"`
 	CIPipelineID        int    `gorm:"default:0"`
 	CIPipelineURL       string `gorm:"default:''"`
-	Branch              string `gorm:"default:''"`
 	CommitSHA           string `gorm:"default:''"`
 	CommitMessage       string `gorm:"default:''"`
 	Source              string `gorm:"default:'manual'"`
+	Tested              bool   `gorm:"default:false"`
 }
 
 type DockerImagePool struct {
 	gorm.Model          `json:"-"`
 	Keyword             string `json:"-" gorm:"uniqueIndex;size:36"`
 	GitlabProjectID     int    `gorm:"index"`
-	ImageName           string
-	ImageTag            string
+	ImageURL            string `gorm:"default:''"`
 	ImageDigest         string `gorm:"default:''"`
-	Registry            string `gorm:"default:''"`
 	CIPipelineID        int    `gorm:"default:0"`
 	CIPipelineURL       string `gorm:"default:''"`
-	Branch              string `gorm:"default:''"`
 	CommitSHA           string `gorm:"default:''"`
 	CommitMessage       string `gorm:"default:''"`
 }
