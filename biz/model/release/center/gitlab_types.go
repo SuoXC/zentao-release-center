@@ -213,47 +213,40 @@ func (p *BranchListResp) GetBase() *BaseResp        { return p.Base }
 func (p *BranchListResp) GetList() []*ReleaseBranch  { return p.List }
 
 type DockerImage struct {
-	ID             string `thrift:"id,1" form:"id" json:"id" query:"id"`
-	ReleaseId      string `thrift:"releaseId,2" form:"releaseId" json:"releaseId" query:"releaseId"`
-	RepoId         string `thrift:"repoId,3" form:"repoId" json:"repoId" query:"repoId"`
-	ImageName      string `thrift:"imageName,4" form:"imageName" json:"imageName" query:"imageName"`
-	ImageTag       string `thrift:"imageTag,5" form:"imageTag" json:"imageTag" query:"imageTag"`
-	ImageDigest    string `thrift:"imageDigest,6" form:"imageDigest" json:"imageDigest" query:"imageDigest"`
-	Registry       string `thrift:"registry,7" form:"registry" json:"registry" query:"registry"`
-	CiPipelineId   int32  `thrift:"ciPipelineId,8" form:"ciPipelineId" json:"ciPipelineId" query:"ciPipelineId"`
-	CiPipelineUrl  string `thrift:"ciPipelineUrl,9" form:"ciPipelineUrl" json:"ciPipelineUrl" query:"ciPipelineUrl"`
-	Branch         string `thrift:"branch,10" form:"branch" json:"branch" query:"branch"`
-	CommitSha      string `thrift:"commitSha,11" form:"commitSha" json:"commitSha" query:"commitSha"`
-	CommitMessage  string `thrift:"commitMessage,12" form:"commitMessage" json:"commitMessage" query:"commitMessage"`
-	Source         string `thrift:"source,13" form:"source" json:"source" query:"source"`
-	CreatedAt      string `thrift:"createdAt,14" form:"createdAt" json:"createdAt" query:"createdAt"`
+	ID            string `thrift:"id,1" form:"id" json:"id" query:"id"`
+	ReleaseId     string `thrift:"releaseId,2" form:"releaseId" json:"releaseId" query:"releaseId"`
+	RepoId        string `thrift:"repoId,3" form:"repoId" json:"repoId" query:"repoId"`
+	ImageUrl      string `thrift:"imageUrl,4" form:"imageUrl" json:"imageUrl" query:"imageUrl"`
+	ImageDigest   string `thrift:"imageDigest,5" form:"imageDigest" json:"imageDigest" query:"imageDigest"`
+	CiPipelineId  int32  `thrift:"ciPipelineId,6" form:"ciPipelineId" json:"ciPipelineId" query:"ciPipelineId"`
+	CiPipelineUrl string `thrift:"ciPipelineUrl,7" form:"ciPipelineUrl" json:"ciPipelineUrl" query:"ciPipelineUrl"`
+	CommitSha     string `thrift:"commitSha,8" form:"commitSha" json:"commitSha" query:"commitSha"`
+	CommitMessage string `thrift:"commitMessage,9" form:"commitMessage" json:"commitMessage" query:"commitMessage"`
+	Source        string `thrift:"source,10" form:"source" json:"source" query:"source"`
+	Tested        bool   `thrift:"tested,11" form:"tested" json:"tested" query:"tested"`
+	CreatedAt     string `thrift:"createdAt,12" form:"createdAt" json:"createdAt" query:"createdAt"`
 }
 
-func (p *DockerImage) GetID() string            { return p.ID }
-func (p *DockerImage) GetReleaseId() string      { return p.ReleaseId }
-func (p *DockerImage) GetRepoId() string         { return p.RepoId }
-func (p *DockerImage) GetImageName() string      { return p.ImageName }
-func (p *DockerImage) GetImageTag() string       { return p.ImageTag }
+func (p *DockerImage) GetID() string             { return p.ID }
+func (p *DockerImage) GetReleaseId() string     { return p.ReleaseId }
+func (p *DockerImage) GetRepoId() string        { return p.RepoId }
+func (p *DockerImage) GetImageUrl() string       { return p.ImageUrl }
 func (p *DockerImage) GetImageDigest() string    { return p.ImageDigest }
-func (p *DockerImage) GetRegistry() string       { return p.Registry }
-func (p *DockerImage) GetCiPipelineId() int32    { return p.CiPipelineId }
-func (p *DockerImage) GetCiPipelineUrl() string  { return p.CiPipelineUrl }
-func (p *DockerImage) GetBranch() string         { return p.Branch }
-func (p *DockerImage) GetCommitSha() string      { return p.CommitSha }
-func (p *DockerImage) GetCommitMessage() string  { return p.CommitMessage }
-func (p *DockerImage) GetSource() string         { return p.Source }
-func (p *DockerImage) GetCreatedAt() string      { return p.CreatedAt }
+func (p *DockerImage) GetCiPipelineId() int32   { return p.CiPipelineId }
+func (p *DockerImage) GetCiPipelineUrl() string { return p.CiPipelineUrl }
+func (p *DockerImage) GetCommitSha() string     { return p.CommitSha }
+func (p *DockerImage) GetCommitMessage() string { return p.CommitMessage }
+func (p *DockerImage) GetSource() string        { return p.Source }
+func (p *DockerImage) GetTested() bool          { return p.Tested }
+func (p *DockerImage) GetCreatedAt() string     { return p.CreatedAt }
 
 type AddDockerImageReq struct {
 	ReleaseId     string  `thrift:"releaseId,1" form:"releaseId" json:"releaseId" query:"releaseId"`
 	RepoId        *string `thrift:"repoId,2,optional" form:"repoId" json:"repoId,omitempty" query:"repoId"`
-	ImageName     string  `thrift:"imageName,3" form:"imageName" json:"imageName" query:"imageName"`
-	ImageTag      string  `thrift:"imageTag,4" form:"imageTag" json:"imageTag" query:"imageTag"`
-	ImageDigest   *string `thrift:"imageDigest,5,optional" form:"imageDigest" json:"imageDigest,omitempty" query:"imageDigest"`
-	Registry      *string `thrift:"registry,6,optional" form:"registry" json:"registry,omitempty" query:"registry"`
-	Branch        *string `thrift:"branch,7,optional" form:"branch" json:"branch,omitempty" query:"branch"`
-	CommitSha     *string `thrift:"commitSha,8,optional" form:"commitSha" json:"commitSha,omitempty" query:"commitSha"`
-	CommitMessage *string `thrift:"commitMessage,9,optional" form:"commitMessage" json:"commitMessage,omitempty" query:"commitMessage"`
+	ImageUrl      string  `thrift:"imageUrl,3" form:"imageUrl" json:"imageUrl" query:"imageUrl"`
+	ImageDigest   *string `thrift:"imageDigest,4,optional" form:"imageDigest" json:"imageDigest,omitempty" query:"imageDigest"`
+	CommitSha     *string `thrift:"commitSha,5,optional" form:"commitSha" json:"commitSha,omitempty" query:"commitSha"`
+	CommitMessage *string `thrift:"commitMessage,6,optional" form:"commitMessage" json:"commitMessage,omitempty" query:"commitMessage"`
 }
 
 func (p *AddDockerImageReq) GetReleaseId() string { return p.ReleaseId }
@@ -263,23 +256,10 @@ func (p *AddDockerImageReq) GetRepoId() string {
 	}
 	return ""
 }
-func (p *AddDockerImageReq) GetImageName() string { return p.ImageName }
-func (p *AddDockerImageReq) GetImageTag() string  { return p.ImageTag }
+func (p *AddDockerImageReq) GetImageUrl() string { return p.ImageUrl }
 func (p *AddDockerImageReq) GetImageDigest() string {
 	if p.ImageDigest != nil {
 		return *p.ImageDigest
-	}
-	return ""
-}
-func (p *AddDockerImageReq) GetRegistry() string {
-	if p.Registry != nil {
-		return *p.Registry
-	}
-	return ""
-}
-func (p *AddDockerImageReq) GetBranch() string {
-	if p.Branch != nil {
-		return *p.Branch
 	}
 	return ""
 }
@@ -297,10 +277,46 @@ func (p *AddDockerImageReq) GetCommitMessage() string {
 }
 func (p *AddDockerImageReq) IsSetRepoId() bool        { return p.RepoId != nil }
 func (p *AddDockerImageReq) IsSetImageDigest() bool    { return p.ImageDigest != nil }
-func (p *AddDockerImageReq) IsSetRegistry() bool       { return p.Registry != nil }
-func (p *AddDockerImageReq) IsSetBranch() bool         { return p.Branch != nil }
 func (p *AddDockerImageReq) IsSetCommitSha() bool      { return p.CommitSha != nil }
-func (p *AddDockerImageReq) IsSetCommitMessage() bool   { return p.CommitMessage != nil }
+func (p *AddDockerImageReq) IsSetCommitMessage() bool { return p.CommitMessage != nil }
+
+type UpdateDockerImageReq struct {
+	ID            string  `thrift:"id,1" form:"id" json:"id"`
+	ImageUrl      *string `thrift:"imageUrl,2,optional" form:"imageUrl" json:"imageUrl,omitempty"`
+	Tested        *bool   `thrift:"tested,3,optional" form:"tested" json:"tested,omitempty"`
+	CommitSha     *string `thrift:"commitSha,4,optional" form:"commitSha" json:"commitSha,omitempty"`
+	CommitMessage *string `thrift:"commitMessage,5,optional" form:"commitMessage" json:"commitMessage,omitempty"`
+}
+
+func (p *UpdateDockerImageReq) GetID() string { return p.ID }
+func (p *UpdateDockerImageReq) GetImageUrl() string {
+	if p.ImageUrl != nil {
+		return *p.ImageUrl
+	}
+	return ""
+}
+func (p *UpdateDockerImageReq) GetTested() bool {
+	if p.Tested != nil {
+		return *p.Tested
+	}
+	return false
+}
+func (p *UpdateDockerImageReq) GetCommitSha() string {
+	if p.CommitSha != nil {
+		return *p.CommitSha
+	}
+	return ""
+}
+func (p *UpdateDockerImageReq) GetCommitMessage() string {
+	if p.CommitMessage != nil {
+		return *p.CommitMessage
+	}
+	return ""
+}
+func (p *UpdateDockerImageReq) IsSetImageUrl() bool      { return p.ImageUrl != nil }
+func (p *UpdateDockerImageReq) IsSetTested() bool        { return p.Tested != nil }
+func (p *UpdateDockerImageReq) IsSetCommitSha() bool     { return p.CommitSha != nil }
+func (p *UpdateDockerImageReq) IsSetCommitMessage() bool { return p.CommitMessage != nil }
 
 type DeleteDockerImageReq struct {
 	ID string `thrift:"id,1" form:"id" json:"id" query:"id"`
@@ -391,15 +407,12 @@ func (p *GitlabBranchListResp) GetList() []*GitlabBranch  { return p.List }
 type CIBuildReq struct {
 	ReleaseId     string  `thrift:"releaseId,1" form:"releaseId" json:"releaseId"`
 	RepoId        *string `thrift:"repoId,2,optional" form:"repoId" json:"repoId,omitempty"`
-	ImageName     string  `thrift:"imageName,3" form:"imageName" json:"imageName"`
-	ImageTag      *string `thrift:"imageTag,4,optional" form:"imageTag" json:"imageTag,omitempty"`
-	ImageDigest   *string `thrift:"imageDigest,5,optional" form:"imageDigest" json:"imageDigest,omitempty"`
-	Registry      *string `thrift:"registry,6,optional" form:"registry" json:"registry,omitempty"`
-	CiPipelineId  *int32  `thrift:"ciPipelineId,7,optional" form:"ciPipelineId" json:"ciPipelineId,omitempty"`
-	CiPipelineUrl *string `thrift:"ciPipelineUrl,8,optional" form:"ciPipelineUrl" json:"ciPipelineUrl,omitempty"`
-	Branch        *string `thrift:"branch,9,optional" form:"branch" json:"branch,omitempty"`
-	CommitSha     *string `thrift:"commitSha,10,optional" form:"commitSha" json:"commitSha,omitempty"`
-	CommitMessage *string `thrift:"commitMessage,11,optional" form:"commitMessage" json:"commitMessage,omitempty"`
+	ImageUrl      string  `thrift:"imageUrl,3" form:"imageUrl" json:"imageUrl"`
+	ImageDigest   *string `thrift:"imageDigest,4,optional" form:"imageDigest" json:"imageDigest,omitempty"`
+	CiPipelineId  *int32  `thrift:"ciPipelineId,5,optional" form:"ciPipelineId" json:"ciPipelineId,omitempty"`
+	CiPipelineUrl *string `thrift:"ciPipelineUrl,6,optional" form:"ciPipelineUrl" json:"ciPipelineUrl,omitempty"`
+	CommitSha     *string `thrift:"commitSha,7,optional" form:"commitSha" json:"commitSha,omitempty"`
+	CommitMessage *string `thrift:"commitMessage,8,optional" form:"commitMessage" json:"commitMessage,omitempty"`
 }
 
 func (p *CIBuildReq) GetReleaseId() string { return p.ReleaseId }
@@ -409,22 +422,10 @@ func (p *CIBuildReq) GetRepoId() string {
 	}
 	return ""
 }
-func (p *CIBuildReq) GetImageName() string { return p.ImageName }
-func (p *CIBuildReq) GetImageTag() string {
-	if p.ImageTag != nil {
-		return *p.ImageTag
-	}
-	return "latest"
-}
+func (p *CIBuildReq) GetImageUrl() string { return p.ImageUrl }
 func (p *CIBuildReq) GetImageDigest() string {
 	if p.ImageDigest != nil {
 		return *p.ImageDigest
-	}
-	return ""
-}
-func (p *CIBuildReq) GetRegistry() string {
-	if p.Registry != nil {
-		return *p.Registry
 	}
 	return ""
 }
@@ -437,12 +438,6 @@ func (p *CIBuildReq) GetCiPipelineId() int32 {
 func (p *CIBuildReq) GetCiPipelineUrl() string {
 	if p.CiPipelineUrl != nil {
 		return *p.CiPipelineUrl
-	}
-	return ""
-}
-func (p *CIBuildReq) GetBranch() string {
-	if p.Branch != nil {
-		return *p.Branch
 	}
 	return ""
 }
@@ -459,14 +454,11 @@ func (p *CIBuildReq) GetCommitMessage() string {
 	return ""
 }
 func (p *CIBuildReq) IsSetRepoId() bool        { return p.RepoId != nil }
-func (p *CIBuildReq) IsSetImageTag() bool       { return p.ImageTag != nil }
 func (p *CIBuildReq) IsSetImageDigest() bool    { return p.ImageDigest != nil }
-func (p *CIBuildReq) IsSetRegistry() bool       { return p.Registry != nil }
 func (p *CIBuildReq) IsSetCiPipelineId() bool   { return p.CiPipelineId != nil }
 func (p *CIBuildReq) IsSetCiPipelineUrl() bool  { return p.CiPipelineUrl != nil }
-func (p *CIBuildReq) IsSetBranch() bool         { return p.Branch != nil }
 func (p *CIBuildReq) IsSetCommitSha() bool      { return p.CommitSha != nil }
-func (p *CIBuildReq) IsSetCommitMessage() bool   { return p.CommitMessage != nil }
+func (p *CIBuildReq) IsSetCommitMessage() bool { return p.CommitMessage != nil }
 
 type DockerImagePoolItem struct {
 	ID             string `thrift:"id,1" form:"id" json:"id"`

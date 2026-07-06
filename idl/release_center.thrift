@@ -94,6 +94,7 @@ struct CreateReleaseReq {
     3: optional string version (api.body="version")
     4: optional string summary (api.body="summary")
     5: optional string parentBranch (api.body="parentBranch")
+    6: string repoId (api.body="repoId")  // 创建提测单时同步创建发布分支必须指定仓库
 }
 
 struct UpdateReleaseReq {
@@ -304,51 +305,6 @@ struct ZentaoPaginatedResp {
     3: i32 total
     4: i32 page
     5: i32 pageSize
-}
-
-// ==================== 部署地址 ====================
-
-struct Deployment {
-    1: string id
-    2: string releaseId
-    3: string moduleName
-    4: string address
-    5: string description
-    6: i32 sortOrder
-    7: string createdAt
-    8: string updatedAt
-}
-
-struct AddDeploymentReq {
-    1: string releaseId (api.body="releaseId")
-    2: string moduleName (api.body="moduleName")
-    3: string address (api.body="address")
-    4: optional string description (api.body="description")
-}
-
-struct UpdateDeploymentReq {
-    1: string id (api.body="id")
-    2: optional string moduleName (api.body="moduleName")
-    3: optional string address (api.body="address")
-    4: optional string description (api.body="description")
-}
-
-struct DeleteDeploymentReq {
-    1: string id (api.body="id")
-}
-
-struct ListDeploymentsReq {
-    1: string releaseId (api.query="releaseId")
-}
-
-struct DeploymentListResp {
-    1: BaseResp base
-    2: list<Deployment> list
-}
-
-struct DeploymentResp {
-    1: BaseResp base
-    2: optional Deployment data
 }
 
 // ==================== GitLab 仓库关联 ====================
@@ -563,11 +519,6 @@ service ReleaseCenterService {
     ZentaoDataResp GetZentaoProducts(1: ZentaoProductsReq req) (api.get="/api/zentao/products")
     ZentaoDataResp GetZentaoProjects(1: ZentaoProjectsReq req) (api.get="/api/zentao/projects")
     ZentaoDataResp GetZentaoExecutions(1: ZentaoExecutionsReq req) (api.get="/api/zentao/executions")
-
-    DeploymentResp AddDeployment(1: AddDeploymentReq req) (api.post="/api/deployments")
-    DeploymentResp UpdateDeployment(1: UpdateDeploymentReq req) (api.post="/api/deployments/update")
-    BaseOnlyResp DeleteDeployment(1: DeleteDeploymentReq req) (api.post="/api/deployments/delete")
-    DeploymentListResp ListDeployments(1: ListDeploymentsReq req) (api.get="/api/deployments")
 
     RepoResp AddRepo(1: AddRepoReq req) (api.post="/api/projects/repos")
     BaseOnlyResp DeleteRepo(1: DeleteRepoReq req) (api.post="/api/projects/repos/delete")
