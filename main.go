@@ -34,7 +34,7 @@ func main() {
 	notificationSvc := service.NewNotificationService(lanxinSvc, emailSvc)
 
 	appctx.ProjectSvc = service.NewProjectService(db)
-	appctx.ReleaseSvc = service.NewReleaseService(db, zentaoClient, notificationSvc)
+	appctx.ReleaseSvc = service.NewReleaseService(db, zentaoClient, gitlabClient, notificationSvc)
 	appctx.ZentaoProxy = service.NewZentaoProxyService(zentaoClient)
 	appctx.GitLabSvc = service.NewGitLabService(db, gitlabClient)
 	appctx.DockerImageSvc = service.NewDockerImageService(db, gitlabClient)

@@ -122,13 +122,15 @@ func (gs *GitLabService) CreateReleaseBranch(req *center.CreateReleaseBranchReq)
 		parentBranch = repo.DefaultBranch
 	}
 
-	if err := gs.gitlabClient.CreateBranch(repo.GitlabProjectID, branchName, parentBranch); err != nil {
+	gitlabBranchURL, err := gs.gitlabClient.CreateBranch(repo.GitlabProjectID, branchName, parentBranch)
+	if err != nil {
 		return nil, fmt.Errorf("create gitlab branch: %w", err)
 	}
+	if gitlabBranchURL == "" {
+		gitlabBranchURL = fmt.Sprintf("%s/-/tree/%s", repo.RepoURL, branchName)
+	}
 
-	gitlabBranchURL := fmt.Sprintf("%s/-/tree/%s", repo.RepoURL, branchName)
-
-	b, err := gs.branchStore.Create(req.ReleaseId, req.RepoId, branchName, "release", parentBranch, gitlabBranchURL)
+	b, err := gs.branchStore.Create(req.ReleaseId, req.RepoId, branchName, "release", parentBranch, gitlabBranchURL, "")
 	if err != nil {
 		return nil, err
 	}
@@ -168,13 +170,15 @@ func (gs *GitLabService) CreateFeatureBranch(req *center.CreateFeatureBranchReq)
 		parentBranch = repo.DefaultBranch
 	}
 
-	if err := gs.gitlabClient.CreateBranch(repo.GitlabProjectID, req.BranchName, parentBranch); err != nil {
+	gitlabBranchURL, err := gs.gitlabClient.CreateBranch(repo.GitlabProjectID, req.BranchName, parentBranch)
+	if err != nil {
 		return nil, fmt.Errorf("create gitlab branch: %w", err)
 	}
+	if gitlabBranchURL == "" {
+		gitlabBranchURL = fmt.Sprintf("%s/-/tree/%s", repo.RepoURL, req.BranchName)
+	}
 
-	gitlabBranchURL := fmt.Sprintf("%s/-/tree/%s", repo.RepoURL, req.BranchName)
-
-	b, err := gs.branchStore.Create(req.ReleaseId, req.RepoId, req.BranchName, "feature", parentBranch, gitlabBranchURL)
+	b, err := gs.branchStore.Create(req.ReleaseId, req.RepoId, req.BranchName, "feature", parentBranch, gitlabBranchURL, "")
 	if err != nil {
 		return nil, err
 	}

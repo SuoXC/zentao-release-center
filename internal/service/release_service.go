@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	center "github.com/yi-nology/zentao-release-center/biz/model/release/center"
+	"github.com/yi-nology/zentao-release-center/internal/gitlab"
 	"github.com/yi-nology/zentao-release-center/internal/mapper"
 	"github.com/yi-nology/zentao-release-center/internal/model"
 	"github.com/yi-nology/zentao-release-center/internal/store"
@@ -23,10 +24,11 @@ type ReleaseService struct {
 	dockerImageStore *store.DockerImageStore
 	featureStore     *store.FeatureStore
 	zentaoClient     *zentao.Client
+	gitlabClient     *gitlab.Client
 	notificationSvc  *NotificationService
 }
 
-func NewReleaseService(db *gorm.DB, zc *zentao.Client, ns *NotificationService) *ReleaseService {
+func NewReleaseService(db *gorm.DB, zc *zentao.Client, gc *gitlab.Client, ns *NotificationService) *ReleaseService {
 	return &ReleaseService{
 		releaseStore:     store.NewReleaseStore(db),
 		itemStore:        store.NewItemStore(db),
@@ -37,6 +39,7 @@ func NewReleaseService(db *gorm.DB, zc *zentao.Client, ns *NotificationService) 
 		dockerImageStore: store.NewDockerImageStore(db),
 		featureStore:     store.NewFeatureStore(db),
 		zentaoClient:     zc,
+		gitlabClient:     gc,
 		notificationSvc:  ns,
 	}
 }
@@ -48,6 +51,10 @@ func (rs *ReleaseService) Create(req *center.CreateReleaseReq) (*center.Release,
 	if req.Name == "" {
 		return nil, fmt.Errorf("name is required")
 	}
+	if req.RepoId == "" {
+		return nil, fmt.Errorf("repoId is required")
+	}
+
 	project, err := rs.projectStore.GetByID(req.ProjectId)
 	if err != nil {
 		return nil, err
@@ -55,11 +62,74 @@ func (rs *ReleaseService) Create(req *center.CreateReleaseReq) (*center.Release,
 	if project == nil {
 		return nil, fmt.Errorf("project not found")
 	}
-	rel, err := rs.releaseStore.Create(req.ProjectId, req.Name, req.GetVersion(), req.GetSummary(), req.GetParentBranch())
+
+	repo, err := rs.repoStore.GetByKeyword(req.RepoId)
 	if err != nil {
 		return nil, err
 	}
+	if repo == nil {
+		return nil, fmt.Errorf("repo not found")
+	}
+	if repo.ProjectKeyword != req.ProjectId {
+		return nil, fmt.Errorf("repo 不属于该项目")
+	}
+
+	parentBranch := req.GetParentBranch()
+	if parentBranch == "" {
+		parentBranch = repo.DefaultBranch
+	}
+	branchName := buildReleaseBranchName(req.GetVersion(), req.Name)
+	description := fmt.Sprintf("发布单 %s 自动创建", req.Name)
+	if req.GetSummary() != "" {
+		description = req.GetSummary()
+	}
+
+	gitlabBranchURL, err := rs.gitlabClient.CreateBranch(repo.GitlabProjectID, branchName, parentBranch)
+	if err != nil {
+		return nil, fmt.Errorf("创建 GitLab 分支失败：%w", err)
+	}
+	if gitlabBranchURL == "" {
+		gitlabBranchURL = repo.RepoURL + "/-/tree/" + branchName
+	}
+
+	rel, err := rs.releaseStore.Create(req.ProjectId, req.Name, req.GetVersion(), req.GetSummary(), parentBranch)
+	if err != nil {
+		// 回滚 GitLab 分支
+		_ = rs.gitlabClient.DeleteBranch(repo.GitlabProjectID, branchName)
+		return nil, fmt.Errorf("create release failed: %w", err)
+	}
+
+	if _, err := rs.branchStore.Create(rel.Keyword, repo.Keyword, branchName, "release", parentBranch, gitlabBranchURL, description); err != nil {
+		_ = rs.gitlabClient.DeleteBranch(repo.GitlabProjectID, branchName)
+		_ = rs.releaseStore.Delete(rel.Keyword)
+		return nil, fmt.Errorf("create release branch failed: %w", err)
+	}
+
 	return mapper.ReleaseToThrift(rel, project.Name, 0, 0, 0, 0), nil
+}
+
+// buildReleaseBranchName 根据发布单名称/版本生成 release 分支名。
+// 默认形式：release/<version>（去除非合法字符）；若 version 为空，回退到 release/<name slug>-<keyword 前 6 位>。
+func buildReleaseBranchName(version, name string) string {
+	safe := func(s string) string {
+		out := make([]rune, 0, len(s))
+		for _, r := range s {
+			switch {
+			case r >= 'a' && r <= 'z',
+				r >= 'A' && r <= 'Z',
+				r >= '0' && r <= '9',
+				r == '-', r == '_', r == '.':
+				out = append(out, r)
+			default:
+				out = append(out, '-')
+			}
+		}
+		return strings.Trim(string(out), "-")
+	}
+	if v := safe(version); v != "" {
+		return "release/" + v
+	}
+	return "release/" + safe(name)
 }
 
 func (rs *ReleaseService) Get(keyword string) (*center.Release, error) {

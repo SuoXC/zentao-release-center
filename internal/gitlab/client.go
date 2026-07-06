@@ -229,7 +229,27 @@ func (c *Client) ListBranches(projectID int) ([]Branch, error) {
 	return branches, nil
 }
 
-func (c *Client) CreateBranch(projectID int, branchName, ref string) error {
+func (c *Client) DeleteBranch(projectID int, branchName string) error {
+	encoded := url.PathEscape(branchName)
+	u := fmt.Sprintf("%s/api/v4/projects/%d/repository/branches/%s", c.baseURL, projectID, encoded)
+	req, err := http.NewRequest("DELETE", u, nil)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("PRIVATE-TOKEN", c.token)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("delete branch returned %d: %s", resp.StatusCode, string(body))
+	}
+	return nil
+}
+
+func (c *Client) CreateBranch(projectID int, branchName, ref string) (string, error) {
 	u := fmt.Sprintf("%s/api/v4/projects/%d/repository/branches", c.baseURL, projectID)
 	form := url.Values{}
 	form.Set("branch", branchName)
@@ -237,22 +257,28 @@ func (c *Client) CreateBranch(projectID int, branchName, ref string) error {
 
 	req, err := http.NewRequest("POST", u, nil)
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return "", fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("PRIVATE-TOKEN", c.token)
 	req.URL.RawQuery = form.Encode()
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("do request: %w", err)
+		return "", fmt.Errorf("do request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("create branch returned %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("create branch returned %d: %s", resp.StatusCode, string(body))
 	}
-	return nil
+
+	var result struct {
+		WebURL string `json:"web_url"`
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = json.Unmarshal(body, &result)
+	return result.WebURL, nil
 }
 
 func (c *Client) GetBranch(projectID int, branchName string) (*Branch, error) {

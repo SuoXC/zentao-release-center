@@ -14,7 +14,7 @@ func NewBranchStore(db *gorm.DB) *BranchStore {
 	return &BranchStore{db: db}
 }
 
-func (bs *BranchStore) Create(releaseKeyword, repoKeyword, branchName, branchType, parentBranch, gitlabBranchURL string) (*model.ReleaseBranch, error) {
+func (bs *BranchStore) Create(releaseKeyword, repoKeyword, branchName, branchType, parentBranch, gitlabBranchURL, description string) (*model.ReleaseBranch, error) {
 	b := &model.ReleaseBranch{
 		Keyword:         uuid.New().String(),
 		ReleaseKeyword:  releaseKeyword,
@@ -23,6 +23,7 @@ func (bs *BranchStore) Create(releaseKeyword, repoKeyword, branchName, branchTyp
 		BranchType:      branchType,
 		ParentBranch:    parentBranch,
 		GitlabBranchURL: gitlabBranchURL,
+		Description:     description,
 	}
 	if err := bs.db.Create(b).Error; err != nil {
 		return nil, err
