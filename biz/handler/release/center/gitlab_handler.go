@@ -51,18 +51,16 @@ func ListRepos(ctx context.Context, c *app.RequestContext) {
 	c.JSON(consts.StatusOK, &center.RepoListResp{Base: &center.BaseResp{Code: 0, Message: "ok"}, List: list})
 }
 
+// CreateReleaseBranch 已废弃。
+// 发布单与发布分支一对一强绑定，分支在创建发布单时（POST /api/releases）同步创建，
+// 不再单独提供手工创建分支的入口。
 func CreateReleaseBranch(ctx context.Context, c *app.RequestContext) {
-	var req center.CreateReleaseBranchReq
-	if err := c.BindAndValidate(&req); err != nil {
-		c.JSON(consts.StatusBadRequest, &center.BranchResp{Base: &center.BaseResp{Code: 400, Message: err.Error()}})
-		return
-	}
-	branch, err := appctx.GitLabSvc.CreateReleaseBranch(&req)
-	if err != nil {
-		c.JSON(consts.StatusInternalServerError, &center.BranchResp{Base: &center.BaseResp{Code: 500, Message: err.Error()}})
-		return
-	}
-	c.JSON(consts.StatusOK, &center.BranchResp{Base: &center.BaseResp{Code: 0, Message: "ok"}, Data: branch})
+	c.JSON(consts.StatusGone, &center.BranchResp{
+		Base: &center.BaseResp{
+			Code:    410,
+			Message: "请通过创建发布单（POST /api/releases）时同步创建发布分支；本接口已废弃",
+		},
+	})
 }
 
 func CreateFeatureBranch(ctx context.Context, c *app.RequestContext) {
@@ -144,6 +142,20 @@ func DeleteDockerImage(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	c.JSON(consts.StatusOK, &center.BaseOnlyResp{Base: &center.BaseResp{Code: 0, Message: "ok"}})
+}
+
+func UpdateDockerImage(ctx context.Context, c *app.RequestContext) {
+	var req center.UpdateDockerImageReq
+	if err := c.BindAndValidate(&req); err != nil {
+		c.JSON(consts.StatusBadRequest, &center.DockerImageResp{Base: &center.BaseResp{Code: 400, Message: err.Error()}})
+		return
+	}
+	image, err := appctx.DockerImageSvc.Update(&req)
+	if err != nil {
+		c.JSON(consts.StatusInternalServerError, &center.DockerImageResp{Base: &center.BaseResp{Code: 500, Message: err.Error()}})
+		return
+	}
+	c.JSON(consts.StatusOK, &center.DockerImageResp{Base: &center.BaseResp{Code: 0, Message: "ok"}, Data: image})
 }
 
 func ListDockerImages(ctx context.Context, c *app.RequestContext) {

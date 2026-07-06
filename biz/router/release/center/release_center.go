@@ -74,6 +74,7 @@ func Register(r *server.Hertz) {
 			_docker_images := _api.Group("/docker-images", _docker_imagesMw()...)
 			_docker_images.POST("", append(_adddockerimageMw(), center.AddDockerImage)...)
 			_docker_images.POST("/delete", append(_deletedockerimageMw(), center.DeleteDockerImage)...)
+			_docker_images.POST("/update", append(_updatedockerimageMw(), center.UpdateDockerImage)...)
 			_docker_images.GET("", append(_listdockerimagesMw(), center.ListDockerImages)...)
 			_docker_images.GET("/pool", append(_listdockerimagepoolMw(), center.ListDockerImagePool)...)
 		}

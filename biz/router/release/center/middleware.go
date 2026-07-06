@@ -243,6 +243,10 @@ func _deletedockerimageMw() []app.HandlerFunc {
 	return nil
 }
 
+func _updatedockerimageMw() []app.HandlerFunc {
+	return nil
+}
+
 func _listdockerimagesMw() []app.HandlerFunc {
 	return nil
 }
